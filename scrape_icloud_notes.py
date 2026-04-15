@@ -32,6 +32,10 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
+for stream in (sys.stdout, sys.stderr):
+    if hasattr(stream, "reconfigure"):
+        stream.reconfigure(encoding="utf-8", errors="replace")
+
 try:
     from playwright.sync_api import sync_playwright, TimeoutError as PwTimeout
 except ImportError:
@@ -144,6 +148,261 @@ def dump_dom_diagnostic(page):
     return candidates
 
 
+def clean_extracted_text(text: str) -> str:
+    """Normalize copied/editor text without collapsing note line breaks."""
+    if not text:
+        return ""
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    lines = [line.rstrip() for line in text.split("\n")]
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return "\n".join(lines).strip()
+
+
+def is_chrome_or_empty_text(text: str) -> bool:
+    """Reject iCloud UI chrome that appears when the editor is not focused."""
+    cleaned = clean_extracted_text(text)
+    if not cleaned:
+        return True
+    compact = re.sub(r"\s+", " ", cleaned).strip().lower()
+    chrome_values = {
+        "no selection",
+        "no selection ⇨ ⇦",
+        "no selection ⇦ ⇨",
+        "⇨ ⇦",
+        "⇦ ⇨",
+    }
+    if compact in chrome_values:
+        return True
+    if compact.startswith("no selection") and len(compact) <= 40:
+        return True
+    return False
+
+
+def remove_duplicate_title(body: str, title: str) -> str:
+    """Strip a duplicated title line when iCloud includes it in copied text."""
+    body = clean_extracted_text(body)
+    title = clean_extracted_text(title)
+    if not body or not title:
+        return body
+
+    body_lines = body.splitlines()
+    if body_lines and body_lines[0].strip() == title.strip():
+        return clean_extracted_text("\n".join(body_lines[1:]))
+
+    if body.startswith(title):
+        return clean_extracted_text(body[len(title):])
+
+    return body
+
+
+def mark_editor_target(frame):
+    """
+    Find the largest visible editor-like element, mark it, and return its box.
+
+    iCloud Notes often renders the editable note surface on canvas-like layers,
+    not conventional text inputs. Focusing a broad document container is not
+    enough; the scraper must click the actual editor surface before copying.
+    """
+    return frame.evaluate("""() => {
+        for (const el of document.querySelectorAll('[data-scrape-editor-target]')) {
+            el.removeAttribute('data-scrape-editor-target');
+        }
+
+        const selectors = [
+            '.notes-document-view [contenteditable]',
+            '.editor-container [contenteditable]',
+            '[contenteditable="true"]',
+            '.notes-document-view canvas',
+            '.editor-container canvas',
+            'canvas',
+            '.notes-document-view',
+            '.editor-container',
+            '.note-content',
+            '.editor-content',
+            '[class*="document-view"]',
+            '[class*="document"]',
+            '[class*="editor"]',
+            'ui-main-pane .main-view'
+        ];
+
+        const rejectSelector = [
+            '.notes-navigation-view',
+            '[class*="navigation"]',
+            '[class*="sidebar"]',
+            '[class*="toolbar"]',
+            '[role="toolbar"]',
+            '[role="tree"]',
+            '[role="listbox"]',
+            '[role="list"]',
+            '[role="grid"]',
+            'nav',
+            'header',
+            'aside'
+        ].join(',');
+
+        const viewportW = window.innerWidth || document.documentElement.clientWidth || 0;
+        let best = null;
+        let bestScore = -1;
+
+        function visibleBox(el) {
+            const rect = el.getBoundingClientRect();
+            const style = window.getComputedStyle(el);
+            if (
+                rect.width < 80 ||
+                rect.height < 80 ||
+                style.visibility === 'hidden' ||
+                style.display === 'none' ||
+                Number(style.opacity || 1) === 0
+            ) {
+                return null;
+            }
+            return rect;
+        }
+
+        for (const selector of selectors) {
+            for (const el of document.querySelectorAll(selector)) {
+                if (el.closest(rejectSelector)) continue;
+                const rect = visibleBox(el);
+                if (!rect) continue;
+
+                const cls = String(el.className || '').toLowerCase();
+                const tag = el.tagName.toLowerCase();
+                const area = rect.width * rect.height;
+                let score = area;
+                if (cls.includes('document')) score += 500000;
+                if (cls.includes('editor')) score += 350000;
+                if (tag === 'canvas') score += 250000;
+                if (rect.left > viewportW * 0.25) score += 200000;
+                if (el.isContentEditable) score += 200000;
+
+                if (score > bestScore) {
+                    best = el;
+                    bestScore = score;
+                }
+            }
+        }
+
+        if (!best) return null;
+
+        best.setAttribute('data-scrape-editor-target', 'true');
+        const rect = best.getBoundingClientRect();
+        return {
+            tag: best.tagName.toLowerCase(),
+            className: String(best.className || ''),
+            x: Math.max(5, Math.floor(rect.width / 2)),
+            y: Math.max(5, Math.floor(rect.height / 2)),
+            width: Math.floor(rect.width),
+            height: Math.floor(rect.height),
+            left: Math.floor(rect.left),
+            top: Math.floor(rect.top)
+        };
+    }""")
+
+
+def focus_note_editor(frame):
+    """Click the detected editor surface and return diagnostic metadata."""
+    try:
+        target = mark_editor_target(frame)
+        if not target:
+            return None
+
+        locator = frame.locator('[data-scrape-editor-target="true"]').first
+        locator.click(
+            position={"x": target["x"], "y": target["y"]},
+            timeout=5000,
+            force=True,
+        )
+        frame.wait_for_timeout(250)
+        return target
+    except Exception:
+        return None
+
+
+def read_clipboard_text(parent_page) -> str:
+    try:
+        return parent_page.evaluate("""async () => {
+            try { return await navigator.clipboard.readText(); }
+            catch(e) { return ''; }
+        }""")
+    except Exception:
+        return ""
+
+
+def copy_active_note_text(frame, parent_page) -> str:
+    """Focus the editor, select all note text, copy it, and read clipboard."""
+    if not parent_page or not hasattr(parent_page, "keyboard"):
+        return ""
+
+    try:
+        parent_page.evaluate("""async () => {
+            try { await navigator.clipboard.writeText(''); } catch(e) {}
+        }""")
+    except Exception:
+        pass
+
+    focus_note_editor(frame)
+
+    try:
+        parent_page.keyboard.press("Control+a")
+        parent_page.wait_for_timeout(200)
+        parent_page.keyboard.press("Control+c")
+        parent_page.wait_for_timeout(500)
+    except Exception:
+        return ""
+
+    return clean_extracted_text(read_clipboard_text(parent_page))
+
+
+def extract_editor_dom_text(frame) -> str:
+    """Fallback for iCloud variants that expose editor text in the DOM."""
+    try:
+        return clean_extracted_text(frame.evaluate("""() => {
+            const selectors = [
+                '[data-scrape-editor-target]',
+                '.notes-document-view [contenteditable]',
+                '.editor-container [contenteditable]',
+                '[contenteditable="true"]',
+                '.notes-document-view',
+                '.editor-container',
+                '.note-content',
+                '.editor-content',
+                '[class*="document-view"]',
+                '[class*="editor"]'
+            ];
+            const rejectSelector = [
+                '.notes-navigation-view',
+                '[class*="navigation"]',
+                '[class*="sidebar"]',
+                '[class*="toolbar"]',
+                '[role="toolbar"]',
+                '[role="tree"]',
+                '[role="listbox"]',
+                '[role="list"]',
+                '[role="grid"]',
+                'nav',
+                'header',
+                'aside'
+            ].join(',');
+
+            let best = '';
+            for (const selector of selectors) {
+                for (const el of document.querySelectorAll(selector)) {
+                    if (el.closest(rejectSelector)) continue;
+                    const rect = el.getBoundingClientRect();
+                    if (rect.width < 80 || rect.height < 80) continue;
+                    const text = (el.innerText || el.textContent || '').trim();
+                    if (text.length > best.length) best = text;
+                }
+            }
+            return best;
+        }"""))
+    except Exception:
+        return ""
+
+
 # ---------------------------------------------------------------------------
 # Core scraper
 # ---------------------------------------------------------------------------
@@ -206,76 +465,46 @@ def scrape_notes(frame, args, note_sel, parent_page=None):
 
         # ── Extract body ─────────────────────────────────────────────────
         body = ""
+        extraction_method = "none"
 
-        # Method 1: Clipboard via parent_page.keyboard
-        if parent_page and hasattr(parent_page, 'keyboard'):
-            try:
-                # Focus the editor area inside the iframe via JS
-                frame.evaluate("""() => {
-                    const ed = document.querySelector('.notes-document-view')
-                            || document.querySelector('.editor-container')
-                            || document.querySelector('[contenteditable]');
-                    if (ed) ed.focus();
-                }""")
-                frame.wait_for_timeout(300)
+        # Method 1: click the editor surface, then copy active note text.
+        for attempt in range(2):
+            copied = copy_active_note_text(frame, parent_page)
+            if not is_chrome_or_empty_text(copied):
+                body = copied
+                extraction_method = "clipboard"
+                break
+            if attempt == 0:
+                frame.wait_for_timeout(400)
 
-                parent_page.keyboard.press("Control+a")
-                parent_page.wait_for_timeout(300)
-                parent_page.keyboard.press("Control+c")
-                parent_page.wait_for_timeout(500)
+        # Method 2: DOM text from editor-like containers, excluding sidebars.
+        if is_chrome_or_empty_text(body):
+            dom_text = extract_editor_dom_text(frame)
+            if not is_chrome_or_empty_text(dom_text):
+                body = dom_text
+                extraction_method = "dom"
 
-                # Read clipboard
-                body = parent_page.evaluate("""async () => {
-                    try { return await navigator.clipboard.readText(); }
-                    catch(e) { return ''; }
-                }""").strip()
-            except Exception as e:
-                print(f"      clipboard failed: {e}")
-
-        # Method 2: innerText from editor area
-        if not body:
-            try:
-                body = frame.evaluate("""() => {
-                    const el = document.querySelector('.notes-document-view')
-                            || document.querySelector('[contenteditable]')
-                            || document.querySelector('.editor-container');
-                    return el ? el.innerText : '';
-                }""").strip()
-            except Exception:
-                pass
-
-        # Method 3: All text nodes in the document view
-        if not body:
-            try:
-                body = frame.evaluate("""() => {
-                    const el = document.querySelector('.notes-document-view');
-                    if (!el) return '';
-                    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-                    let text = '';
-                    while (walker.nextNode()) text += walker.currentNode.textContent + '\\n';
-                    return text.trim();
-                }""").strip()
-            except Exception:
-                pass
-
-        # Method 4: Sidebar preview as last resort
-        if not body and sidebar_preview:
+        # Method 3: Sidebar preview as an explicit last resort.
+        if is_chrome_or_empty_text(body) and sidebar_preview:
             body = sidebar_preview
-            print(f"      (sidebar preview only)")
+            extraction_method = "sidebar_preview"
+            print("      warning: editor extraction failed; using sidebar preview")
 
-        # Strip the title line from the body if it's duplicated at the top
-        if body and body.startswith(title):
-            body = body[len(title):].lstrip("\n")
+        body = remove_duplicate_title(body, title)
 
         notes.append({
             "title": title,
             "body": body,
             "body_length": len(body),
             "scraped_at": datetime.now(timezone.utc).isoformat(),
+            "extraction_method": extraction_method,
         })
 
         pct = (idx + 1) / total * 100
-        print(f"   [{idx+1}/{total}] ({pct:.0f}%) {title[:50]}  — {len(body)} chars")
+        print(
+            f"   [{idx+1}/{total}] ({pct:.0f}%) {title[:50]}  "
+            f"— {len(body)} chars via {extraction_method}"
+        )
 
     return notes
 
@@ -328,6 +557,7 @@ def write_output(notes, dest: Path):
                 "created": None,
                 "modified": None,
                 "scraped_at": note["scraped_at"],
+                "extraction_method": note.get("extraction_method", "unknown"),
                 "category": None,
                 "tags": [],
                 "notes": "",
