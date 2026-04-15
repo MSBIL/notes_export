@@ -24,6 +24,7 @@ Prerequisites:
 """
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -93,6 +94,26 @@ def try_selector(page, *selectors, timeout=5000):
             return sel
         except PwTimeout:
             continue
+    return None
+
+
+def find_notes_frame(page):
+    """Return the current iCloud Notes application frame, if it is attached."""
+    try:
+        iframe_el = page.query_selector('iframe[data-name="notes"]')
+        if iframe_el is None:
+            iframe_el = page.query_selector('iframe.child-application')
+        if iframe_el:
+            frame = iframe_el.content_frame()
+            if frame:
+                return frame
+    except Exception:
+        pass
+
+    for frame in page.frames:
+        url = frame.url or ""
+        if "/applications/notes" in url.lower():
+            return frame
     return None
 
 
@@ -196,6 +217,48 @@ def remove_duplicate_title(body: str, title: str) -> str:
         return clean_extracted_text(body[len(title):])
 
     return body
+
+
+def text_fingerprint(text: str) -> str:
+    """Stable fingerprint for detecting stale repeated clipboard captures."""
+    normalized = re.sub(r"\s+", " ", clean_extracted_text(text)).strip()
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def click_note_item(frame, note_sel: str, idx: int, item, parent_page=None) -> bool:
+    """Select a sidebar note using real pointer events before falling back to JS."""
+    if parent_page and hasattr(parent_page, "mouse"):
+        try:
+            box = item.bounding_box()
+            if box:
+                parent_page.mouse.move(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+                parent_page.mouse.click(box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+                return True
+        except Exception:
+            pass
+
+    try:
+        locator = frame.locator(note_sel).nth(idx)
+        locator.scroll_into_view_if_needed(timeout=3000)
+        locator.click(timeout=5000, force=True)
+        return True
+    except Exception:
+        pass
+
+    try:
+        item.evaluate("""
+            el => {
+                el.scrollIntoView({block:'center'});
+                el.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true}));
+                el.dispatchEvent(new MouseEvent('mousedown', {bubbles:true}));
+                el.dispatchEvent(new PointerEvent('pointerup', {bubbles:true}));
+                el.dispatchEvent(new MouseEvent('mouseup', {bubbles:true}));
+                el.click();
+            }
+        """)
+        return True
+    except Exception:
+        return False
 
 
 def mark_editor_target(frame):
@@ -407,7 +470,7 @@ def extract_editor_dom_text(frame) -> str:
 # Core scraper
 # ---------------------------------------------------------------------------
 
-def scrape_notes(frame, args, note_sel, parent_page=None):
+def scrape_notes(frame, args, note_sel, parent_page=None, notes=None):
     """Click through each note in the sidebar and capture its content.
 
     Note content is rendered on <canvas> in iCloud Notes, so we use
@@ -430,7 +493,9 @@ def scrape_notes(frame, args, note_sel, parent_page=None):
         print(f"   (limiting to {total})")
 
     # ── Iterate notes ────────────────────────────────────────────────────
-    notes = []
+    if notes is None:
+        notes = []
+    seen_body_hashes = {}
     for idx in range(total):
         # Re-query because DOM may have mutated
         items = frame.query_selector_all(note_sel)
@@ -442,6 +507,7 @@ def scrape_notes(frame, args, note_sel, parent_page=None):
 
         # Extract title + preview from the sidebar item text
         title = "Untitled"
+        sidebar_title = "Untitled"
         sidebar_preview = ""
         try:
             sidebar_text = item.inner_text()
@@ -449,16 +515,14 @@ def scrape_notes(frame, args, note_sel, parent_page=None):
                 lines = [l.strip() for l in sidebar_text.strip().splitlines() if l.strip()]
                 if lines:
                     title = lines[0] or "Untitled"
+                    sidebar_title = title
                 if len(lines) > 1:
                     sidebar_preview = "\n".join(lines[1:])
         except Exception:
             pass
 
-        # Click note using JS only (avoids Playwright viewport/actionability stalls)
-        try:
-            item.evaluate("el => { el.scrollIntoView({block:'center'}); el.click(); }")
-        except Exception as e:
-            print(f"   ⚠️ Could not click note {idx+1}: {e}")
+        if not click_note_item(frame, note_sel, idx, item, parent_page):
+            print(f"   ⚠️ Could not click note {idx+1}")
             continue
 
         frame.wait_for_timeout(note_delay)
@@ -467,22 +531,47 @@ def scrape_notes(frame, args, note_sel, parent_page=None):
         body = ""
         extraction_method = "none"
 
-        # Method 1: click the editor surface, then copy active note text.
-        for attempt in range(2):
-            copied = copy_active_note_text(frame, parent_page)
-            if not is_chrome_or_empty_text(copied):
-                body = copied
-                extraction_method = "clipboard"
-                break
-            if attempt == 0:
-                frame.wait_for_timeout(400)
+        for attempt in range(4):
+            if attempt:
+                if not click_note_item(frame, note_sel, idx, item, parent_page):
+                    break
+                frame.wait_for_timeout(note_delay + (attempt * 700))
 
-        # Method 2: DOM text from editor-like containers, excluding sidebars.
-        if is_chrome_or_empty_text(body):
-            dom_text = extract_editor_dom_text(frame)
-            if not is_chrome_or_empty_text(dom_text):
-                body = dom_text
-                extraction_method = "dom"
+            # Method 1: click the editor surface, then copy active note text.
+            for copy_attempt in range(2):
+                copied = copy_active_note_text(frame, parent_page)
+                if not is_chrome_or_empty_text(copied):
+                    body = copied
+                    extraction_method = "clipboard"
+                    break
+                if copy_attempt == 0:
+                    frame.wait_for_timeout(400)
+
+            # Method 2: DOM text from editor-like containers, excluding sidebars.
+            if is_chrome_or_empty_text(body):
+                dom_text = extract_editor_dom_text(frame)
+                if not is_chrome_or_empty_text(dom_text):
+                    body = dom_text
+                    extraction_method = "dom"
+
+            body = remove_duplicate_title(body, title)
+            body_hash = text_fingerprint(body) if body else ""
+            previous_title = seen_body_hashes.get(body_hash)
+            if (
+                body_hash
+                and previous_title
+                and previous_title != title
+                and attempt < 3
+            ):
+                print(
+                    "      warning: copied body matches a previous note; "
+                    "retrying selection"
+                )
+                body = ""
+                extraction_method = "retry_stale_clipboard"
+                continue
+
+            break
 
         # Method 3: Sidebar preview as an explicit last resort.
         if is_chrome_or_empty_text(body) and sidebar_preview:
@@ -491,13 +580,27 @@ def scrape_notes(frame, args, note_sel, parent_page=None):
             print("      warning: editor extraction failed; using sidebar preview")
 
         body = remove_duplicate_title(body, title)
+        body_hash = text_fingerprint(body) if body else ""
+        duplicate_body_from = None
+        previous_title = seen_body_hashes.get(body_hash)
+        if body_hash and previous_title and previous_title != title:
+            duplicate_body_from = previous_title
+            print(
+                "      warning: final body still matches a previous note; "
+                "using copied-body title and preserving sidebar title"
+            )
+            title = previous_title
+        if body_hash:
+            seen_body_hashes.setdefault(body_hash, title)
 
         notes.append({
             "title": title,
+            "sidebar_title": sidebar_title,
             "body": body,
             "body_length": len(body),
             "scraped_at": datetime.now(timezone.utc).isoformat(),
             "extraction_method": extraction_method,
+            "duplicate_body_from": duplicate_body_from,
         })
 
         pct = (idx + 1) / total * 100
@@ -533,9 +636,13 @@ def write_output(notes, dest: Path):
             with open(filepath, "w", encoding="utf-8") as f:
                 f.write("---\n")
                 f.write(f'title: "{title}"\n')
+                if note.get("sidebar_title") and note.get("sidebar_title") != title:
+                    f.write(f'sidebar_title: "{note["sidebar_title"]}"\n')
                 f.write(f'folder: "Unknown"\n')
                 f.write(f'account: "iCloud"\n')
                 f.write(f'scraped_at: "{note["scraped_at"]}"\n')
+                if note.get("duplicate_body_from"):
+                    f.write(f'duplicate_body_from: "{note["duplicate_body_from"]}"\n')
                 f.write("---\n\n")
                 f.write(f"# {title}\n\n")
                 f.write(note["body"])
@@ -544,6 +651,7 @@ def write_output(notes, dest: Path):
             record = {
                 "id": f"note_{i:04d}",
                 "title": title,
+                "sidebar_title": note.get("sidebar_title", title),
                 "filename": filepath.name,
                 "relative_path": str(filepath.relative_to(dest)),
                 "absolute_path": str(filepath),
@@ -558,6 +666,7 @@ def write_output(notes, dest: Path):
                 "modified": None,
                 "scraped_at": note["scraped_at"],
                 "extraction_method": note.get("extraction_method", "unknown"),
+                "duplicate_body_from": note.get("duplicate_body_from"),
                 "category": None,
                 "tags": [],
                 "notes": "",
@@ -630,6 +739,8 @@ def main():
         print(f"   Limit:       {args.limit} notes")
     print()
 
+    notes = []
+
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=False)
         context = browser.new_context(
@@ -665,14 +776,10 @@ def main():
             # It has data-name="notes" and URL containing /applications/notes
             # (NOT the main page frame whose URL is just icloud.com/notes).
             try:
-                iframe_el = page.query_selector('iframe[data-name="notes"]')
-                if iframe_el is None:
-                    iframe_el = page.query_selector('iframe.child-application')
-                if iframe_el:
-                    notes_frame = iframe_el.content_frame()
-                    if notes_frame:
-                        print("📦 Found Notes app iframe!")
-                        break
+                notes_frame = find_notes_frame(page)
+                if notes_frame:
+                    print("📦 Found Notes app iframe!")
+                    break
             except Exception:
                 pass
 
@@ -709,10 +816,18 @@ def main():
 
         # ── Step 2: wait for content, then dump DOM to find selectors ─────
         print("   ⏳ Giving the iframe 10s to fully render…")
-        target.wait_for_timeout(10000)
+        try:
+            target.wait_for_timeout(10000)
+        except Exception:
+            refreshed = find_notes_frame(page)
+            if refreshed:
+                target = refreshed
+                target.wait_for_timeout(5000)
+            else:
+                raise
 
         # Dump top-level DOM structure inside the iframe/target
-        dom_tree = target.evaluate("""() => {
+        dom_script = """() => {
             function walk(el, depth) {
                 if (depth > 6) return '';
                 const tag = el.tagName?.toLowerCase() || '';
@@ -738,7 +853,17 @@ def main():
                 return result;
             }
             return walk(document.body, 0);
-        }""")
+        }"""
+        try:
+            dom_tree = target.evaluate(dom_script)
+        except Exception:
+            refreshed = find_notes_frame(page)
+            if not refreshed:
+                raise
+            print("   ⏳ Notes iframe refreshed; reacquiring it…")
+            target = refreshed
+            target.wait_for_timeout(5000)
+            dom_tree = target.evaluate(dom_script)
         print("\n🔍 DOM structure inside iframe/target:")
         print(dom_tree[:5000])
 
@@ -811,7 +936,13 @@ def main():
 
         print("✅ Notes loaded — starting scrape\n")
 
-        notes = scrape_notes(target, args, note_sel, parent_page=page)
+        try:
+            notes = scrape_notes(target, args, note_sel, parent_page=page, notes=notes)
+        except Exception:
+            if notes:
+                print("\n⚠️  Scrape interrupted after collecting notes; saving partial export.")
+                write_output(notes, dest)
+            raise
 
         browser.close()
 
