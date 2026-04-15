@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eval Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #faf9f5;
+      --surface: #ffffff;
+      --border: #e8e6dc;
+      --text: #141413;
+      --text-muted: #b0aea5;
+      --accent: #d97757;
+      --accent-hover: #c4613f;
+      --green: #788c5d;
+      --green-bg: #eef2e8;
+      --red: #c44;
+      --red-bg: #fceaea;
+      --header-bg: #141413;
+      --header-text: #faf9f5;
+      --radius: 6px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Lora', Georgia, serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---- Header ---- */
+    .header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .header h1 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    .header .instructions {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin-top: 0.25rem;
+    }
+    .header .progress {
+      font-size: 0.875rem;
+      opacity: 0.8;
+      text-align: right;
+    }
+
+    /* ---- Main content ---- */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* ---- Sections ---- */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      flex-shrink: 0;
+    }
+    .section-header {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.75rem 1rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .section-body {
+      padding: 1rem;
+    }
+
+    /* ---- Config badge ---- */
+    .config-badge {
+      display: inline-block;
+      padding: 0.2rem 0.625rem;
+      border-radius: 9999px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-left: 0.75rem;
+      vertical-align: middle;
+    }
+    .config-badge.config-primary {
+      background: rgba(33, 150, 243, 0.12);
+      color: #1976d2;
+    }
+    .config-badge.config-baseline {
+      background: rgba(255, 193, 7, 0.15);
+      color: #f57f17;
+    }
+
+    /* ---- Prompt ---- */
+    .prompt-text {
+      white-space: pre-wrap;
+      font-size: 0.9375rem;
+      line-height: 1.6;
+    }
+
+    /* ---- Outputs ---- */
+    .output-file {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .output-file + .output-file {
+      margin-top: 1rem;
+    }
+    .output-file-header {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .output-file-header .dl-btn {
+      font-size: 0.7rem;
+      color: var(--accent);
+      text-decoration: none;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-weight: 500;
+      opacity: 0.8;
+    }
+    .output-file-header .dl-btn:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+    .output-file-content {
+      padding: 0.75rem;
+      overflow-x: auto;
+    }
+    .output-file-content pre {
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+    }
+    .output-file-content img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+    }
+    .output-file-content iframe {
+      width: 100%;
+      height: 600px;
+      border: none;
+    }
+    .output-file-content table {
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      width: 100%;
+    }
+    .output-file-content table td,
+    .output-file-content table th {
+      border: 1px solid var(--border);
+      padding: 0.375rem 0.5rem;
+      text-align: left;
+    }
+    .output-file-content table th {
+      background: var(--bg);
+      font-weight: 600;
+    }
+    .output-file-content .download-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .output-file-content .download-link:hover {
+      background: var(--border);
+    }
+    .empty-state {
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    /* ---- Feedback ---- */
+    .prev-feedback {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.625rem 0.75rem;
+      margin-top: 0.75rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .prev-feedback-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.25rem;
+      color: var(--text-muted);
+    }
+    .feedback-textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      resize: vertical;
+      color: var(--text);
+    }
+    .feedback-textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    .feedback-status {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      min-height: 1.1em;
+    }
+
+    /* ---- Grades (collapsible) ---- */
+    .grades-toggle {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .grades-toggle:hover {
+      color: var(--accent);
+    }
+    .grades-toggle .arrow {
+      margin-right: 0.5rem;
+      transition: transform 0.15s;
+      font-size: 0.75rem;
+    }
+    .grades-toggle .arrow.open {
+      transform: rotate(90deg);
+    }
+    .grades-content {
+      display: none;
+      margin-top: 0.75rem;
+    }
+    .grades-content.open {
+      display: block;
+    }
+    .grades-summary {
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .grade-badge {
+      display: inline-block;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .grade-pass { background: var(--green-bg); color: var(--green); }
+    .grade-fail { background: var(--red-bg); color: var(--red); }
+    .assertion-list {
+      list-style: none;
+    }
+    .assertion-item {
+      padding: 0.625rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8125rem;
+    }
+    .assertion-item:last-child { border-bottom: none; }
+    .assertion-status {
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+    .assertion-status.pass { color: var(--green); }
+    .assertion-status.fail { color: var(--red); }
+    .assertion-evidence {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+      padding-left: 1.5rem;
+    }
+
+    /* ---- View tabs ---- */
+    .view-tabs {
+      display: flex;
+      gap: 0;
+      padding: 0 2rem;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .view-tab {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.625rem 1.25rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .view-tab:hover { color: var(--text); }
+    .view-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .view-panel { display: none; }
+    .view-panel.active { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+    /* ---- Benchmark view ---- */
+    .benchmark-view {
+      padding: 1.5rem 2rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .benchmark-table {
+      border-collapse: collapse;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.8125rem;
+      width: 100%;
+      margin-bottom: 1.5rem;
+    }
+    .benchmark-table th, .benchmark-table td {
+      padding: 0.625rem 0.75rem;
+      text-align: left;
+      border: 1px solid var(--border);
+    }
+    .benchmark-table th {
+      font-family: 'Poppins', sans-serif;
+      background: var(--header-bg);
+      color: var(--header-text);
+      font-weight: 500;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .benchmark-table tr:hover { background: var(--bg); }
+    .benchmark-table tr.benchmark-row-with { background: rgba(33, 150, 243, 0.06); }
+    .benchmark-table tr.benchmark-row-without { background: rgba(255, 193, 7, 0.06); }
+    .benchmark-table tr.benchmark-row-with:hover { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-without:hover { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-table tr.benchmark-row-avg { font-weight: 600; border-top: 2px solid var(--border); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-with { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-without { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-delta-positive { color: var(--green); font-weight: 600; }
+    .benchmark-delta-negative { color: var(--red); font-weight: 600; }
+    .benchmark-notes {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+    }
+    .benchmark-notes h3 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+    }
+    .benchmark-notes ul {
+      list-style: disc;
+      padding-left: 1.25rem;
+    }
+    .benchmark-notes li {
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      margin-bottom: 0.375rem;
+    }
+    .benchmark-empty {
+      color: var(--text-muted);
+      font-style: italic;
+      text-align: center;
+      padding: 3rem;
+    }
+
+    /* ---- Navigation ---- */
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .nav-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+      transition: all 0.15s;
+    }
+    .nav-btn:hover:not(:disabled) {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .nav-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .done-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.5rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .done-btn:hover {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .done-btn.ready {
+      border: none;
+      background: var(--accent);
+      color: white;
+      font-weight: 600;
+    }
+    .done-btn.ready:hover {
+      background: var(--accent-hover);
+    }
+    /* ---- Done overlay ---- */
+    .done-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+    .done-overlay.visible {
+      display: flex;
+    }
+    .done-card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 2rem 3rem;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+    }
+    .done-card h2 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .done-card p {
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+      line-height: 1.5;
+    }
+    .done-card .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    .done-card button {
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    .done-card button:hover {
+      background: var(--bg);
+    }
+    /* ---- Toast ---- */
+    .toast {
+      position: fixed;
+      bottom: 5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 0.625rem 1.25rem;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 200;
+    }
+    .toast.visible {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" style="height:100vh; display:flex; flex-direction:column;">
+    <div class="header">
+      <div>
+        <h1>Eval Review: <span id="skill-name"></span></h1>
+        <div class="instructions">Review each output and leave feedback below. Navigate with arrow keys or buttons. When done, copy feedback and paste into Claude Code.</div>
+      </div>
+      <div class="progress" id="progress"></div>
+    </div>
+
+    <!-- View tabs (only shown when benchmark data exists) -->
+    <div class="view-tabs" id="view-tabs" style="display:none;">
+      <button class="view-tab active" onclick="switchView('outputs')">Outputs</button>
+      <button class="view-tab" onclick="switchView('benchmark')">Benchmark</button>
+    </div>
+
+    <!-- Outputs panel (qualitative review) -->
+    <div class="view-panel active" id="panel-outputs">
+    <div class="main">
+      <!-- Prompt -->
+      <div class="section">
+        <div class="section-header">Prompt <span class="config-badge" id="config-badge" style="display:none;"></span></div>
+        <div class="section-body">
+          <div class="prompt-text" id="prompt-text"></div>
+        </div>
+      </div>
+
+      <!-- Outputs -->
+      <div class="section">
+        <div class="section-header">Output</div>
+        <div class="section-body" id="outputs-body">
+          <div class="empty-state">No output files found</div>
+        </div>
+      </div>
+
+      <!-- Previous Output (collapsible) -->
+      <div class="section" id="prev-outputs-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="togglePrevOutputs()">
+            <span class="arrow" id="prev-outputs-arrow">&#9654;</span>
+            Previous Output
+          </div>
+        </div>
+        <div class="grades-content" id="prev-outputs-content"></div>
+      </div>
+
+      <!-- Grades (collapsible) -->
+      <div class="section" id="grades-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="toggleGrades()">
+            <span class="arrow" id="grades-arrow">&#9654;</span>
+            Formal Grades
+          </div>
+        </div>
+        <div class="grades-content" id="grades-content"></div>
+      </div>
+
+      <!-- Feedback -->
+      <div class="section">
+        <div class="section-header">Your Feedback</div>
+        <div class="section-body">
+          <textarea
+            class="feedback-textarea"
+            id="feedback"
+            placeholder="What do you think of this output? Any issues, suggestions, or things that look great?"
+          ></textarea>
+          <div class="feedback-status" id="feedback-status"></div>
+          <div class="prev-feedback" id="prev-feedback" style="display:none;">
+            <div class="prev-feedback-label">Previous feedback</div>
+            <div id="prev-feedback-text"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav" id="outputs-nav">
+      <button class="nav-btn" id="prev-btn" onclick="navigate(-1)">&#8592; Previous</button>
+      <button class="done-btn" id="done-btn" onclick="showDoneDialog()">Submit All Reviews</button>
+      <button class="nav-btn" id="next-btn" onclick="navigate(1)">Next &#8594;</button>
+    </div>
+    </div><!-- end panel-outputs -->
+
+    <!-- Benchmark panel (quantitative stats) -->
+    <div class="view-panel" id="panel-benchmark">
+      <div class="benchmark-view" id="benchmark-content">
+        <div class="benchmark-empty">No benchmark data available. Run a benchmark to see quantitative results here.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Done overlay -->
+  <div class="done-overlay" id="done-overlay">
+    <div class="done-card">
+      <h2>Review Complete</h2>
+      <p>Your feedback has been saved. Go back to your Claude Code session and tell Claude you're done reviewing.</p>
+      <div class="btn-row">
+        <button onclick="closeDoneDialog()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ---- Embedded data (injected by generate_review.py) ----
+    const EMBEDDED_DATA = {"skill_name": "handwritten-pdf-transcriber", "runs": [{"id": "eval-1-ptm-all-with_skill", "prompt": "Read all the pdf charts that start with 'PTM' in the /sessions/great-funny-newton/mnt/202510/ folder and convert them into a single markdown file named ptm_notes.md, merged by date.", "eval_id": 1, "outputs": [{"name": "ptm_notes.md", "type": "text", "content": "# PTM Notes\n\n---\n\n## 12-10-2025\n\n### Trend - TTR\n\nStarts with a TL BO\n- TT9\n- GRBO\n- Spike/MB on the ORen\n\nTTR breaks for 3/4 of the session\n\n\u25b3 During the spike period this caused quite an issue with LIFT studies\n\n**Diagram:** Shows TTR trend with marked BO and notes on spike response\n\n### Homework:\n- Find examples of Spikes - TTR\n- HTF contest\n- What is the peak of the initial spike to contrive. they became a trend day\n\n---\n\n### Technical Analysis Discussion\n\n- What is the peak of trading OPR legs?\n- What can them bead prevented + trend?\n- Examples:\n  - HTF OJR\n  - initial range of the day to me?\n  - chart/reports\n  - is bigger pullback example\n\n### Optional Day Structure - TR = BO\n- For both Types of days:\n  - TTA\n  - Andy Raging TR\n  - 1B1\n  - ET\n  - CH / Precut CH\n\n**Diagram:** Shows TTR structure with labeled breakout patterns\n\n### Bond CH - TTBO\n\n- Loss elimination yesterday\n- Mathy TTBO+\n- last 1-2 hrs changes TTBO to a brand CH\n\n- Hot use [ LTR/UTE - TTRO ] bead get a BO lag \u00f8 the lag in the left = 4-6pm\n\n### Homework:\n- Find Boned CH Days\n- Study these structures\n- How is TTBO overlap by Bond CH\n- Check is the relationship to HTF\n\n**Diagrams:** Multiple zigzag and mountain patterns showing TR/TTR relationships\n\n---\n\n## 19-10-2025\n\n### Tre Days:\n\n- TTRD :\n  - TR = BO\n  - LTR = UTE\n  - UTE = LTR\n  - GT\n  - TS\n  - MRO\n- REV\n\n**Diagram:** Trend TR Trend with mid - Range OPm annotation\n\n### Additional Range Analysis:\n\n- Professionist\n- Spike & Reel\n- ORV\n- MDR\n- MRO Create/Rally\n- RXLC\n\n**Opening Range (ORv):**\n- Mid-Range (Top/Bottom) Reel\n\n**Range Expansion Back in the day:**\n\n### TR = BO:\n\nLoss Range for several brs\n- Loss than 4 ADR\n- Manded Shift - LTR boils / Recharge analyis\n- trend / Many wave bounced / Earnings\n- Traders are minded to Time & PPA\n\n### TTRD - UTE/LTR, LTR/UTE, 2PM+\n\n**Diagram:** Shows UTR box with trend and BOA annotations\n\n### Alchemist:\nStudy TTRD :\n1. Find examples of UTE/LTR (LTR/UTR)\n2. Study the relationship of the above factors\n3. Alchemist proto of gap closing\n   - No losing = TR\n   - Overall day based on pit 1-3 hrs.\n\n### GT TTRD:\n- Usually Start with an ET in the pit hrs.\n- OR is usually on GT\n- By ET early in the day. if UR at ET TTRD\n- *ET: Gets more information later\n- *If ET upon a smell => Both <= Trend a bigger ET TTRO / Depends on: No energy\n- Trend a bigger ET TTRO / Upright range\n\n### Homework:\n- Same ideas on T TTRD\n- What is the probe of day structure to:\n  1) Not Change => a big ET\n  2) Change = Trend / TTRD\n\n### TS: Trend TR = Trend\n\n- TS: is a TTRD type\n- a variant of TRE's day\n- TR port needs a deep PS to form\n- TS has Trend day characteristics\n\n### Homework:\n- Same research framework\n- Some TA parameters as above\n- Use Trend day characteristics in your study\n- Trend Day\n  - Small OR\n  - Gravity do\n  - DSP: O - L (BG) : Small O - H (EG)\n  - BGs: remains open = PS, cannot C BGOs yet be one case, yet it hasn't\n  - do is a spike\n  - PBs: Legs on TR\n\n*TS can be a OTC hardcre day as well\n\n---\n\n### MRO: middle of the (Long's) Strange open\n\n**Diagram:** Shows price movement with opening range and various trend patterns\n\n### Approx APR for today: based on HTF PA\n\n### Homework:\n- Some study framework\n- 1 parameters as above\n- HTF Context: is determine if the pit leg is unmistakable\n- 3M of realistic (ORV) Daily range for today\n- Open is in approx middle of the day\n- Overlap of TE PA\n- *+ effective factor => MRO\n\n---\n\n## 26-10-2025\n\n### All Red Days are versions of TTRDs :\n\n- MRO way: for a TR: UP leg : On leg\n\n### Red Day types:\n- Homeshun\n- SPIKE & REV :\n- ORV\n- MDR\n- GOD Grade/Rally\n- RXLC\n\nOpening Range\n\nBoinding\n- 20-40\n- smaller L-\n\n**Diagram:** Shows horseshoe pattern with labeled opening range, T0 BOG notation, change indicator\n\n### ORV : Opening Range Reversal\n\n**Diagram:** Shows multiple chart patterns with labeled movements, spike points, and multi-OFC annotations\n\n- Inited BE Trend Strength\n- multiples of OFC\n\nORV : Opening Range Reversal\n\n**Diagram:** Shows offer resells in TR option with LP of strong Rev & become a new Trend, UIO - Best Point, V Rev analysis\n\n### Homework:\nFind examples of this type of day (ORV)\n- Study UTE Content\n- Details of initial RO\n- Opening Gap on ish use + bar 1\n\n### Find out:\n1- What is the probe of a day below bar 1 (RL case) to get bar?\n2- Comparing a Spike ?\n3- Conditions resulting in ORV\n4- Probe / daily stop then break? late...\n\n### 5- List of dge/cycle multiple & related expectations\n6- Parts of boy type:\n   - Trend ?\n   - TTRD ?\n\n### MDR and Day Reversal:\n- Comment\n- Usually a ET or Flat straightened around bars 3B-C1\n- (Bol Red) BR is finding digs Good 8 procs within its structure\n- Need to find RI (intra-time + FT)\n- *on if SB is OK/18\n\n- Usually OR is inside in\n\n### Homework:\n- R-P the above:\n  - UTE Structure? How can U belp?\n  - Details of mid-day bd (will onemon)\n  - FF: Rean, hw onemon\n  - What is the role of a strong Rev SBF? How does it change Hook?\n    - if SB is code, what does it need to succeed?\n  - What is the expectation of a new RD?\n    - then mass RLD, shot a hr pork of a strong head?\n\n---\n\n## 27-10-2025\n\n### Strong Trend less Early in the Session\n\n**Diagram:** Shows trading patterns with labels \"Long\", \"Strong = Failed\", \"OR Spike\"\n\n- Small BO of a small BO GOD Kally/Crusk\n- RXLC Range expansion Late in the day\n\n### Small BO of a Small BO : Bridge\n\n**Diagrams:** Multiple chart sections showing trading patterns\n\n- BG Small BO of a Small BO follows the upbar TR\n- \u25b3 1) Usually BC BO is top of the Range = ish + contact dependent\n- 2) Less likely BR BO is more quickly for a day step\n\n- Usually if is a late-day BO BO\n- + And ranges is usually small\n- Becomes: R \u00d7 L\n- plus EGD C/R + initial BR BO goes some SLD\n\n### Homework:\n- Find other examples of the above day type\n- Look for smaller versions (same Patterns form)\n- Gutted & HTF context\n- Calculate the probe:\n  1. Small R = 10 bar TR\n  2. BO of SBOB range & UM\n- N) 3 points / 4 PBO in CH FRO / of DT / DB in CH\n  W TBTL EOD/D ZSV, TREL EOD/D 3SY, E Rean, Tres up 25Y\n\n### GOD Grade /Rally:\n1. Presence of a Trap\n2. A structure that needs a correction [guide to be trap area\n3. Showing SB is good PT.\n4. Usually forma in TR days\n\n### Homework:\n- Find example of the above\n- Check for all the mechanical elements\n- Calculate probe of multiple\n- Make sure your initial sto is smaller than an point potential of the chart\n- + bullet on probs, your count at-least a 1.1 handle, if probs are hype (> 1pt)\n- If probes are in seg, you need 1:2 or greater than 1:1\n\n**Diagrams:** Chart sections showing trading patterns and technical analysis\n\n### RXLC : Next session: Wed. 29.10.2025\n\n---\n"}], "grading": {"eval_id": 1, "run": "with_skill", "expectations": [{"text": "Output file ptm_notes.md is created in the target folder", "passed": true, "evidence": "File found at with_skill/outputs/ptm_notes.md, 289 lines"}, {"text": "File contains 4 date headers (one per source PDF) in chronological order", "passed": true, "evidence": "Headers ## 12-10-2025, ## 19-10-2025, ## 26-10-2025, ## 27-10-2025 present in order"}, {"text": "Each date section contains transcribed text (not empty)", "passed": true, "evidence": "All 4 sections contain multiple subsections and bullet points"}, {"text": "Abbreviations like TTR, TTRD, BO, BL, ADR are preserved", "passed": true, "evidence": "40 hits on key terms. TTR, TTRD, BO, BL, ADR all preserved; minor errors on a few edge terms (TT9 vs TIB)"}, {"text": "Homework sections are present and clearly marked", "passed": true, "evidence": "Multiple '### Homework:' sections present across all date blocks"}, {"text": "Watermark/hash text (b4fa30e382...) is NOT included in output", "passed": true, "evidence": "grep for b4fa30e and hotmail returned 0 matches"}], "pass_count": 6, "total_count": 6, "pass_rate": 1.0, "summary": {"passed": 6, "failed": 0, "total": 6, "pass_rate": 1.0}}}, {"id": "eval-1-ptm-all-without_skill", "prompt": "Read all the pdf charts that start with 'PTM' in the /sessions/great-funny-newton/mnt/202510/ folder and convert them into a single markdown file named ptm_notes.md, merged by date.", "eval_id": 1, "outputs": [{"name": "ptm_notes.md", "type": "text", "content": "# PTM Notes - October 2025\n\n## October 12, 2025\n\n### Trend Analysis\n- **Trend**: -7%K\n- **Start with a K BD**:\n  - TSS\n  - DASO\n  - Market (PE) on the open\n- **TTR Range for %E of the 100L intra**\n\n#### Important Note\nDuring the spike phase, this context waiter with LAST reading\n\n### Pivot Points\n- Find examples of L500 - TTR\n- RES Contact\n- What is the post of the initial spike to embrace\n  - lag/comes a trend day\n\n- What is the phase of leading avg legs?\n- Used can have had preceded a bond?\n  - Example:\n    - HTE 930\n    - Initial range of the day = NMC\n    - Std H Equalis\n    - A higher pattern example\n\n### Additional Context\n- **TTR = 0.0** (To Count)\n\n### For both Types of days\n- **L00 - TTR**: How TTR peak plan be away type f TTR\n- **TTR - 0.0**\n\n#### Key Structures\n- **TTR**: Clear pattern\n  - DJAD Closing TTR\n  - TBI\n  - ET\n  - D I / Reload Col\n\n#### Range Analysis\n- How is the trend in TTR formation\n- Range: TTR's impact is a function of AMX, %, %\n\n### Homework\nSince this day type on same as TTR = TTR, use the same framework values\n\n### Bond Cut: TTFRO\n- Lasis concourse followed\n- Mostly TTFRO\n- Last T-2 hrs: changes TTFRO to\n  - blessed cut\n\n- Short axis\n  - STD 1250 / STD 1250 TTFRO: had got a 90 log to TR top a his last = 65min\n\n### Homework\n- Find Bond Cut temps\n- Study there structure\n- How is TTFRO related to bond cut\n- Trend in the relationship to STD\n- Study if the day before/yesterday\n\n---\n\n## October 19, 2025\n\n### Market Overview\n- **Strong Trend but Early in the Session**: TTR/RD\n\n### Setup Analysis\n- Load BO of a Small 0 : Hedge\n\n#### Key Observations\n1. Load 60 of a Small 60: Hedge\n2. Strong BO of a trend 60\n3. ODD Ratio/Crash\n4. RES: Range expansion Lads in the day\n\n#### Load Analysis\n- Load BO of a Small 60: Hedge\n\n**\u03a3**: Last Load BO of a Small 60 - looking at a 3-hour TR:\n- Urgently B5 to the top of the range + a market dependent\n- Less likely PS B5 & away quickly for a mm - v002\n\n#### Daily Algo in late day, en BRs\n- and ranges in smoothly small\n\n#### Request: R-N-L\n- For 1400 CYK: If unit BR\n- All port next lot\n\n#### Homework\n- Find other examples of the short day type\n- Look for similar setups (from market types)\n- Collect K HTF context\n\n#### Calibrate for probe\n1. Send in lower TA\n2. Q: Is this\n   3.1: Cumulative for speed USURE\n   3.2: 50 of USURE range A and\n\n**A1**: 3 pulse / 5 FBD or C1\n- FBD of a ET / D10\n\n#### ESD: Crude/Daily\n1. **Breakout of a Trap**\n2. A Structure that sands a correlation back to the trap zone\n3. Strong box BO and FT\n4. Steady frame in TR days\n\n#### Homework\n- Find example of the coast\n- Check for all potential channels\n- Calculate box probe:\n  1. Send in lower TA\n  2. Q: Is this\n  3. Cumulative for speed\n\n**Real**: Next session - Wed 29.10.2025\n\n---\n\n## October 26, 2025\n\n### Overview\n- **All Bear Days see versions of TTFRO**\n  - with way for a TR: sp log = B5 log\n\n#### Key Points\n- **Red Days**: Versions of TTFRO:\n  - **Home task**: DEME A REV\n  - **dEB**: dEB\n  - **aFEM**: aFEM\n  - **aFER**: aFER\n  - **400 (reads/Trails)**: 400\n  - **KGL**: KGL\n\n### Pending Trough Analysis\n- **Expanding**: R = 0\n- **Path**: Initial trough at the start/end in initial box BO\n  - There is a change of character\n  - = 0 Amy\n  - Highest of OK\n\n### GAY: Opening Changes/Balanced\n\n**Rating**: \u2191\n- All tart of the day\n- CAV = \u2193\n- CAV = \u2193 ph du\n\n**GAY**: 1\n- Spike A Para with lest lim open\n- Of had spike forth & day = dated / Spline Ader\n\n- Offers mixture in = a TE open\n- UP of Strong Base to become a new trend\n- U/O L test Feat: U\n\n**Homework**: 1\n- Find examples of this type of day (NMC)\n- Study OTE context\n- Evaluate of initial KO\n- Opening tops on TE last T hour T\n\n**Find out**:\n1. What is the probe of a spke below bot T (% gas) be put left?\n2. Combining a new color\n3. Generous reading in OSD\n4. Proto: Final spke reading in OSD\n   - Trade: TTR\n   - TTR Range of OSD\n\n5. Look at AMB/SPR: Trailbz & related explorations\n6. Peer of Long Type:\n   - Trend\n   - FTEM?\n\n### MCHL and Bongs Reversed\n- Unmask\n- Usually in all for Compiled reward bars: BF + LE\n- Study in all Holding gaps: Good & more info in structure\n- Adjust in Upwards - T inversion = FT\n- Study BF in OK /5\n\n### Homework\n- Read the above:\n  - HTE Shadows? How can I help?\n  - Collect of m:d by day (send 'answer')\n  - PT Shave, bits answer\n\n  - What is the jobs of a Strong Sax SPT\n  - And date if change month?\n  - If KG is clear, what does it need to succeed?\n\n  - Study the regulation of a new UBT\n  - How nan HMC, what is the walk of a strong head\n    - Often new HMC, what is the walk of a strong head?\n\n---\n\n## October 27, 2025\n\n### TA Ranges\n- **TTRu**\n- **PA**\n- **Lop - 1%K**\n- **aF - 1%**\n- **aF**\n\n#### Action\n- **Real**: Potential Range\n  - **DTE**: DTE\n  - **Lop**: Lop Lop (BN 5 Req)\n  - **aFE**: aFE\n  - **UDT**: UDT\n  - **MM**: MM\n  - **CP**: CP\n  - **TTE**: TTE\n\n### The Sun\n- Buy Props from second hrs\n- Data asun 5-9min\n- Review at trend\n- Prized on MOLD of TTU & TTA\n\n### Triples are models of Trin & TA\n\n#### TTRu Formulation\n- Ado\n\n### Phase Structure Model\n- Bund - Start\n- Mid-Range - Strong\n- UTR - New Strong\n\n#### Price Movement\n- Rise of op.\n- UTR & New Strong\n- Gap Expansion: Link to T top\n- A Bigger Trend\n- Rise of BT on MX\n- Bund - L50 Range Kos\n- C of 4 UTT\n- Rise if Strong + 3%\n- BIP (E / E) + TU\n- Untalking am / am-asp\n\n### Homework\n1. **Study TTRu**:\n   - Study the breathing of the same future\n   - Different kind of EFT/DD\n   - Study its role of a Strong Hour\n   - TTR should have basis if TI TA\n   - Compare the two\n   - E Q: How should we handle\n   - If BT e - lead a Brand - Find\n   - Look at BT of a day & see if\n\n2. **Assess the role of a Strong Hour SBT**\n   - How date it change month?\n   - If KS is clear, what does it need to succeed?\n\n3. **Study if TTRu has relation**\n\n### Range Analysis\n- **TA**: Brand-The-Brand\n  - Mark-Ranges - strong\n  - A Up-Strong - Tend\n\n**TTRu**: Daily TA in wider form\n- Bund - L50 Range Kos\n- B of 4 UTT\n- Rise if Strong + 3%\n\n#### Formation Patterns\n- F, H, L\n  - Rise of 4 UTT\n  - Rise if Strong + 3%\n  - Bund (E / E) + TU\n  - Untalking am / am-asp\n\n### Homework\n- TTRu, Brand-The-Brand\n- Assess the role of a Strong Hour\n- Using TTRu in wider form\n\n### Analysis Notes\n- TTRu, Brand-The-Brand\n- Mark-Ranges - strong\n- A Up-Strong - Tend\n\n**PPT**: Study the Brand\n- Using TA in wider form\n- Bund - L50 Range Kos\n- C of 4 UTT\n- Rise if Strong + 3%\n\n**PPT**: Dual of Living Long TTT?\n- A New\n- I could see a Bad + Brand\n- Study my relationship to the wider trend\n- Look at Big Band\n- Range TTT - TA\n- Look at Brand on TA as\n- Bund vs TA\n- Upward\n\n### Additional Analysis\n- A: Up a Band\n- UTR: study about\n- TTR Mark (E: E) + TU\n- Looking at / am-asp\n\n### Broader Context\n- Some of 4 UTT\n- Rise if Strong + 3%\n- Bund (E / E) + TU\n- Untalking am / am-asp (+ look:)\n\n### Final Notes\n- Big Band (I looking strong term)\n- C Biggest - Brand\n- E in Bund - strong\n\n**BPT**: Mark BO: is there band at TT?\n- Bund\n- I is Breakout\n\n**Brosund**: There is a forecast\n- For market: TT advance if the talk is compromised\n- Use of series when there of the Bund in a brand\n- Mark in open times of a day\n- After-hours study - new trend?\n- Show mark all band\n\n**Follow ups**:\n- For market, D-advance of the talk is compromised\n- Use a brand in the talk of a day\n- After hours study of pattern\n- Show new trend\n- Mark all band\n"}], "grading": {"eval_id": 1, "run": "without_skill", "expectations": [{"text": "Output file ptm_notes.md is created in the target folder", "passed": true, "evidence": "File found at without_skill/outputs/ptm_notes.md, 349 lines"}, {"text": "File contains 4 date headers (one per source PDF) in chronological order", "passed": true, "evidence": "4 headers present, but format is 'October 12, 2025' instead of DD-MM-YYYY"}, {"text": "Each date section contains transcribed text (not empty)", "passed": false, "evidence": "Content is severely hallucinated. Oct 19 section references 'Small BO of a Small BO / Wedge' content that belongs to Oct 27. Oct 27 content is completely fabricated 'Brand/Bund' analysis unrelated to source."}, {"text": "Abbreviations like TTR, TTRD, BO, BL, ADR are preserved", "passed": false, "evidence": "TTRD corrupted to TTFRO, ORV becomes GAY, BL becomes KGL. 30 matches but most in wrong context or wrong terms."}, {"text": "Homework sections are present and clearly marked", "passed": true, "evidence": "Homework sections present in each date block"}, {"text": "Watermark/hash text (b4fa30e382...) is NOT included in output", "passed": true, "evidence": "0 matches for watermark text"}], "pass_count": 4, "total_count": 6, "pass_rate": 0.667, "summary": {"passed": 4, "failed": 2, "total": 6, "pass_rate": 0.667}}}, {"id": "eval-2-ptm-two-files-with_skill", "prompt": "I have some scanned trading notes in /sessions/great-funny-newton/mnt/202510/ \u2014 the files are PTM_26-10-2025.pdf and PTM_27-10-2025.pdf. Can you transcribe just those two into a markdown file called oct_late.md? Put them in date order.", "eval_id": 2, "outputs": [{"name": "oct_late.md", "type": "text", "content": "# PTM Notes\n\n---\n\n## 26-10-2025\n\nAll Red Days are versions of TTRDs:\n- w/o any for a TR: up log + on log *(diagram)*\n\n### Red day types:\n- Horseshoe\n- SPIKE & REV - Opening Range\n- ORV\n- MDR\n- GOD Grade/Rally\n- RXL\n\n### Horseshoe Bouncing\n*(diagram showing 20-40 range with \"Smallo_La\" bounce pattern and note: \"Te Rmg | There is a change\")*\n\nInited BL Trend Strong\n\n\u00b11 A SIR\n\nCharacter:\n- 88 Spike\n\nMultiple of ORV\n\n**ORV: Opening Range Reversal**\n\nPUMP\n- all go at the day\n\nCAY\n\nTR 80\n\nORV\nSpike &Rev\n\nSpelled orn the open\n\nIf that spike fails & Rev \u2192 ORV / Spike &Rev\n\nOpen results in ORV options\nIf a strong Rev in TRE options\n\nME Test\n\nV Rev\n\n### Homework:\n- Find example of this type of day (avg)\n- Study HTF context\n- Details of initial RO\n- Opening Gap on 1st 1/2 bar 1\n\nFind out:\n1. What is the prob of a stop below bar 1 (RLs ease) to get hl?\n2. Considering a short, Silven?\n3. Conditions resulting in ORV\n4. Probe | early stop mm crosh?\n   Late = ?\n\n5. List of atr/Stc mudele & related support/resistance\n6. Prob of Dome Typo:\n   - Trend ?\n   - TTRD ?\n\n### MDR and Day Reversal\n- Claimant\n- Usually w b or Plt simplified arranged barn 38-43\n- (BL Red) : BR is fishing Gap. Good 5 prose within its structure\n- Next on same TR ((nachtone + FT)\n- OK if 5B is 0% / 1B\n\n- Usually BR in sade in\n\n### Homework:\n- R at the above:\n  - HTF Structure? How can I halp?\n  - Details of mid-day b I (mid-manner)\n    - FF: Rav., h, manner\n  - What is the role of a Sharing time 89?\n    - How does it change Prob?\n    - If 50 is cheek, what does it need to succeed?\n  - What is the expectation up of a new HD?\n    - Often miss HiD, shot a he role of a strung head?\n\n*(diagram showing pulled BR flag = FF Rav. with \"strong BR trend\" annotation)*\n\n---\n\n## 27-10-2025\n\nStrong Trend bias Early in the Session\n\nTTRD\n\nPUMP\nSharge \u2192 Failed\nOR Spike\n\nSmall 50 of a Small 50\nGOD Rally/Crush\n\nRXL Range expansion Late in the day\n\nSmall 50 of a Small 50: Bridge\n\n*(diagram showing multiple trading charts with candlestick patterns and trend lines)*\n\nBR Small 50 of a Small 50 following the wRbar TR\n- Usually BC 50 to top of the range + dol + contact dependent\n- Less likely BR 50 & more quickly for a new wRod\n\nVanilla H 50 a beRday 50\n+ And merge is usually smell\n\nRemarks: R X L\n\nplus EGD CLR if initial BR\n50 goes over 50\n\n#### Homework:\n- Find other example of the above day type\n- look for similar version (non theme bias)\n- Cubed & HTF context\n- Calculate the probe\n  1. Small 5=10 bar TR\n  2. (diagram: F80 of DT/DB with TBRL EqRcd 25J FTAW: TRES UP 25J)*\n\n### GOD Grade/Rally:\n1. Presure of a Tarp\n   i. A structure that needs a correction handle to be trap area\n   ii. Showing flow 50 is Good FT.\n   iii. Healthy Formen in TR days\n\n#### Homework:\nFind example of the above:\n- check for all the substantial elements\n- calculate probe of value\n- Make sure your initial b/h is smaller than he profit potential of at the Lah.\n- Based on probe, your count at least a 1:1 handle.\n  if probes are high ( > TQ)\n- if probes are w teo, you need t.i on greater than t.t\n\n*(diagram showing trading chart with multiple support/resistance levels and annotations)*\n\nRXL: Next session: Wed 29.10.2025\n"}], "grading": {"eval_id": 2, "run": "with_skill", "expectations": [{"text": "Output file oct_late.md is created", "passed": true, "evidence": "File found at with_skill/outputs/oct_late.md"}, {"text": "File contains exactly 2 date headers", "passed": true, "evidence": "Exactly 2 headers: ## 26-10-2025 and ## 27-10-2025"}, {"text": "Oct 26 section appears before Oct 27 section", "passed": true, "evidence": "26-10-2025 section precedes 27-10-2025 section"}, {"text": "Content includes Rev Day types (Horseshoe, ORV, MDR, etc.)", "passed": true, "evidence": "Horseshoe, ORV, MDR all present. SPIKE & REV, RXL also included."}], "pass_count": 4, "total_count": 4, "pass_rate": 1.0, "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0}}}, {"id": "eval-2-ptm-two-files-without_skill", "prompt": "I have some scanned trading notes in /sessions/great-funny-newton/mnt/202510/ \u2014 the files are PTM_26-10-2025.pdf and PTM_27-10-2025.pdf. Can you transcribe just those two into a markdown file called oct_late.md? Put them in date order.", "eval_id": 2, "outputs": [{"name": "oct_late.md", "type": "text", "content": "# Trading Notes - Late October 2025\n\n## October 26, 2025\n\n**Quant Systems** - msbil@hotmail.com\n\n### Setup\nAs few days are sessions of PTM(S):\n- mm avg. for a 1hr or 1m % bn log = chop log (diagram shown)\n\n### Heatmap\n- Momentum\n- DEMA & RSV \u2192 Showing bounce\n- p&d\n- 2ROI\n- BR0 mods/fMults\n- KAL\n\n**Price Flow**\n- Grounding\n  - XX = 00\n  - \\+ (diagram with arrows showing flow pattern)\n  - a = MM\n  - TR_Bars vs 5 Bars\n  - Initial 60 Trend Slowing\n  - Multiple Ft OK\n\n#### ORV I - Opening - Grounded - Reversal\n\n**Battery**\n- All m = \u2191\n- all Len of the day\n\n**CAY = \u2193** (with spike down)\n- m avg.\n\n**Calculation**\n- Split A-Pd1: Chap is the ONLY way of \u2193 md cycles A-Pd1 / cycle Alpha\n\nOffice mostly in a 2D open\n- Lt of strong bar ls become a new trend\n- U/D i best test\n\n(diagram shown with arrow patterns)\n\n### Homemarks I\n- Find example of this type of day (MM3)\n  - Study DTE Cluster I\n  - Ideally of initial AD\n  - Opening Dips vs off-Ld & bar I\n\nFind out:\n1. What is the peak of the stop below bar ? (% gaps) be get hit?\n2. Conditions I have \u2014 other?\n3. Guideines reaching in ORV\n4. Probe t spry stop trade = ?\n\n5. Look at MTFSTC Failure & related opportunities\n6. Pen of long Typo\n   - Trend ?\n   - FTrips ?\n\n### MERL - All Pmy Reversal\n- Grounding\n  - Usually @ d sf bar completed around bars 3d - 4d\n  - Mostly EV @ 1 finding Dips. Gnd 5-5mns videos i is structure\n  - Hard Strong bar 5d i function i \u2192 PT\n  - Peak TR i of it / 15\n  - Study Mt is scale...\n\n**Frameworks:**\n- Read the above!\n  - DTE Shadows? How was I sttps?\n  - Guidelng i all of day set (hwd nomes)\n  - FF Tren, less income\n  - What is the Aft of strong bar SBT\n  - How date it change Points?\n  - If Ok is clear, what dize it need to succeed?\n  - What is the expectation if a new DRT? (......)\n  - Other mm-MT what is rule of a strong head?\n\n(diagrams shown with price action patterns)\n\n---\n\n## October 27, 2025\n\n**Quant Systems** - msbil@hotmail.com\n\n### Opening Analysis\n- Strong Trend bvs Badly in the Season\n- TTFD\n\n### Setup Analysis\n- Rept Slaps\n- OB Spiral\n\n- Read Bt of a trend SQ\n- OD hadig/Crash\n- Act - Range extension Cable w the day\n\nLoad SQ of a Small SQ I \u2013 fledge\n\n(Multiple price charts shown)\n\n### Analysis Points\n- all Load Bt of a Small SQ: February the 3 bars TR\n  1) Weekly BS Go to Typ of the range - a Chani dependent\n  2) Less Charts i % 5: a swing quickly for a drip - +60Z\n\nStudy mry w late day. Mt the\n- Add ranges in unusual smlL\n\u2193\nBecome! PT & L\n- Pen ERS CIRCLE\n- % gm news bot\n\n#### Find other examples of the short day:\n- Took for sender oneness I (some notes form)\n- Coded i STC Cluster\n- Calculate the peak\n  1. Send & sr Pen TA\n  2. D i nest\n    2.1 Guidelne for sprat SBOW\n    2.1 Bf of S.SBG range & smt\n\nAll S psias / t FRED vs Cat:\n- Feb of a CA / DD\n- (diagram showing TSRL Bullish SPg, Trip Dp 26Z)\n\n#### ESD - Gents / Moody\n1. Robustng of a Trend\n2. A Structured that needs a correlation basis to the traps sets\n3. Strong Rul 10 - trend PT\n4. Ghoulking forens 10 - 70k days\n\n**Homemarks I**\n- End example of the short day type:\n  - Check for all the potential channels\n  - Calculate peak of ex pm\n  - Write down period with S, wonder then 8 uplifted practices of ta leads\n  - Based on creed, you cured in best & I T Leads\n  - H gives up Zargs (3 40x)\n  - tf great me on 80s, pet end Ite for gamake Ison = PT\n\n(Additional price charts shown)\n\n---\n\n**Final Note:** Need session Wed 29.10.2025\n"}], "grading": {"eval_id": 2, "run": "without_skill", "expectations": [{"text": "Output file oct_late.md is created", "passed": true, "evidence": "File found at without_skill/outputs/oct_late.md, 150 lines"}, {"text": "File contains exactly 2 date headers", "passed": true, "evidence": "2 headers: ## October 26, 2025 and ## October 27, 2025"}, {"text": "Oct 26 section appears before Oct 27 section", "passed": true, "evidence": "Oct 26 precedes Oct 27"}, {"text": "Content includes Rev Day types (Horseshoe, ORV, MDR, etc.)", "passed": false, "evidence": "Only 2 matches for Horseshoe/ORV/MDR keywords. Content is largely hallucinated \u2014 'heatmap analysis', 'battery analysis', 'Quant Systems trading setup' not from source PDFs."}], "pass_count": 3, "total_count": 4, "pass_rate": 0.75, "summary": {"passed": 3, "failed": 1, "total": 4, "pass_rate": 0.75}}}, {"id": "eval-3-ptm-single-with_skill", "prompt": "Please convert PTM_19-10-2025.pdf from /sessions/great-funny-newton/mnt/202510/ into markdown. Save it as ptm_19oct.md in the same folder.", "eval_id": 3, "outputs": [{"name": "ptm_19oct.md", "type": "text", "content": "# PTM Notes\n\n---\n\n## 19-10-2025\n\n### Trade Days:\n\n- TTRD:\n  - TR 60\n  - LTR - UTR\n  - UTE - LTR\n  - ET\n  - T3\n  - MRO\n\nTrend: TR - Trend\nmU - Range of tm\n\n- Rev.\n\n### Position Management:\n\n- Horizontal\n- Splits & Rev\n- OEV\n- HEX\n- MOD Create/Rally\n- RXL\n\nOpening Range (Rar\nMid-rang (Top/Bottom) Rar\nRange expansion back in day bag\n\n- TM D\n  - TKD\n  - TRI\n\n**Diagram:** *(Technical chart showing UTR/LTR relationships)*\n- UTR\n- Test\n- LTR\n- Both\n\n### Trading Activity Analysis:\n\nTR = 160:\nLoss Range for several hrs\nLess than 1 ADR\n\n- Marked Shift: 1cm hands / Preference dcolyet\n  - Trend: meany more banded / settings\n\nTraders are mindful of Time & PA\n\n### TTRD: UTR/LTR\nLTR/UTR\n2:00-3\n\n**Diagram:** *(Technical diagram with UTR/LTR/Both indicators and test points)*\n\n### Volume Mountain:\n\n**Diagram:** *(Volume mountain with UTR Range and LTR Range labels)*\n- 2048mm = Energy\n- UTR Range\n- Volume - Energy\n\n**Diagram:** *(Price depth analysis with P5 Depth, smaller BOE, LTP, Rear closing)*\n\n- End of OP OPT\n  - OR Range\n  - Size & Energy of RO Log\n  - Depth of PO of UTR\n  P All relative to:\n    1) ADR\n\n### Homework (Section 2):\n\n- Analyze ABK / Log Size\n  - Homework:\n    - Study TTRD 1\n      1. Find examples of OTE/OTE (LTR/UTR)\n      2. Study the relationship of the above factors\n      3. Determine prob of gap closing\n      or no trading = TR\n      or Overall site based on pft 1-3 bps\n\n### ET TTRD:\n\nUsually start with an ET in the pft tier\n- OR is usually on ET\n- By ET early in the day, if up & ET TTRD\n- *ET: gets more information later\n\nIf ET open, a small => Rant\n- Trend\n- a bigger ET TTRD\n- TTRD\n\nIf x = x Wide => Rant\n- Trend\n- a bigger ET\n- Height range\n\n### Homework:\n\n- Same ideas as TTRD\n- Same TR parameters as above\n- UTE Catchs: to determine if the sit log is unattainable\n- EGL of realistic (BDE) Daily range for today\n- open is in approx middle of day\n- 0.5 dose of TR pa\n- * effective factor => MRO\n\n---\n\n### Additional Notes:\n\nMRO - middle of day (Long's) Strange, Open\n\n**Diagram:** *(Chart showing trading pattern with HTF PA marker and annotations)*\n\nApprox ADR for today: based on HTF PA\n\n### Final Homework:\n\n- Some study framework\n- E parameters as above\n- UTE Catchs: to determine if the sit log is unattainable\n- EGL of realistic (BDE) Daily range for today\n- open is in approx middle of day\n- 0.5 dose of TR pa\n- * effective factor => MRO\n"}], "grading": {"eval_id": 3, "run": "with_skill", "expectations": [{"text": "Output file ptm_19oct.md is created", "passed": true, "evidence": "File found at with_skill/outputs/ptm_19oct.md, 134 lines"}, {"text": "Content mentions TR Days, TTRD, and at least 3 subtypes (UTR/LTR, ET, T3, MRO, etc.)", "passed": true, "evidence": "TTRD present; subtypes LTR, UTR, ET, T3, MRO all appear. TR structure well-covered."}, {"text": "At least one Homework section is present", "passed": true, "evidence": "Multiple Homework sections present (Sections 2 and more)"}, {"text": "File has meaningful length (at least 100 lines)", "passed": true, "evidence": "134 lines"}], "pass_count": 4, "total_count": 4, "pass_rate": 1.0, "summary": {"passed": 4, "failed": 0, "total": 4, "pass_rate": 1.0}}}, {"id": "eval-3-ptm-single-without_skill", "prompt": "Please convert PTM_19-10-2025.pdf from /sessions/great-funny-newton/mnt/202510/ into markdown. Save it as ptm_19oct.md in the same folder.", "eval_id": 3, "outputs": [{"name": "ptm_19oct.md", "type": "text", "content": "# PTM - 19-10-2025\n\n## Tax Ranges\n- ATR\n  - Tier 1: 0-50\n  - Tier 2: 50-80\n  - Tier 3: 80+\n  - T2\n\n## Audit\n- Weighted Avg 1-5\n  - 50%\n  - 25% (data)\n  - 25% (weighted avg)\n\n- Days\n  - Data Processing\n  - 2019 (data)\n  - 2018\n  - Days (n days)\n\n## Project Boundaries\n- Defined boundaries\n- Cross sections\n  - Tier 1: 40-80\n  - Tier 2: 80+\n  - Tier 3: 120+\n\n## Analysis\n\n### Data Range\n- Key Range for reported data\n- Data point 1: from reported info\n- Data point 2: from\n\n- Sorted by PT\n\n### Trend Analysis\n- Growth curve\n- Current: 2019\n- Previous: 2018\n- Average: Data range\n\n- Shows projection\n  - [Diagram showing upward trend]\n  - Long OP\n\n### Calculation Notes\n- Sum 4 op SPT\n- See formula (1)\n- Sum 4 (missing) + (2)\n- Math R/(3+1)=4/2\n\n### Formulas & References\n- Relevant data 1 / op (2)\n- Detail for sub-heading of the data points\n- Different part of SPT\n\n### Key Variables\n- A1 (Page\n- A2 (Total)\n- A3 (Data 1, 2, 3 = xx)\n- B1 (see)\n  - SPT of total in 3 / 3 = XX\n\n### PT_Trend\n- Analysis for 4 \u2192 SPT = 2X1 \u2192 Y = AA + IDD\n- PT analysis PT = DY + SPT (DD)\n- If (PT = X) = add = Sum [complex formula]\n- If x + y < add = Sum [complex formula]\n\n### Detailed Calculations\n- Item 1: Data = 0.5 + YYY\n  - A1: xx (X)\n  - B1: Y (Z)\n  - B2: x = y/xx\n  - C1: xy = [calculation]\n  - AB: a+b = ATR\n\n### B2: XY + YZ Base line on all\n\n**[Diagram: Shows relationship between variables with arrows and connections]**\n\n- Slope notation\n  - Long OP\n\n### Data Analysis continued\n- Day 1\n- Day 2 (additional)\n- Day 3: (data point)\n- Result: [Data by quarter] OP =\n\n**[Diagram: Tree structure showing hierarchical data]**\n\n### PT Notes\n- Sorted by quarter base on PT =\n\n**[Diagram: Line graph showing trend from 0 to Long OP with data points]**\n\n### Additional Calculations\n- Relevant data 2\n- Info used for X \u2192 show used T =\n- Data points from X column\n- Impact from (data)\n- Action 1 (opens)\n- Option 2: [calculation]\n- Option from _ _ _ _\n\n**[Diagram: Branching structure with multiple paths]**\n\n### Summary Section\n- Tier 1 range:\n  - 50 (base)\n  - 75 (middle)\n  - (range)\n- Tier 2 (marked)\n  - 100\n  - 125 (upper)\n\n### Key Findings\n- PT for Trend:\n  - Study the relationship of the two factors\n  - Different part of SPT\n  - Base of entire table\n\n### Final Notes\n- A1: Sum\n  - (1) based on the details\n  - (2) range (Y/3)\n  - (3) sample or (2) = 2\n  - (4) = xx\n  - Sum of total in 1, 2 = XX\n\n- A2: Sum\n  - (1) add 2 + 3\n  - (2) = (X)\n  - (3) multiple = (Z)\n\n### PT_Trend Analysis\n- X = Total fix range\n\n**[Diagram: Mathematical representation showing multiple connected components]**\n\n### Remaining Notes\n- Tier note: Defined\n  - Data range limits\n  - PT segment: multiple\n  - Add 2 parts: one by day\n  - Action for (notes)\n  - Optional from _ _ _ _\n\n---\n\n*Document source: PTM_19-10-2025.pdf*\n*Converted to markdown for easier reference*\n"}], "grading": {"eval_id": 3, "run": "without_skill", "expectations": [{"text": "Output file ptm_19oct.md is created", "passed": true, "evidence": "File found at without_skill/outputs/ptm_19oct.md, 155 lines"}, {"text": "Content mentions TR Days, TTRD, and at least 3 subtypes (UTR/LTR, ET, T3, MRO, etc.)", "passed": false, "evidence": "grep for TTRD/UTR/LTR/MRO/T3/ET returned 0 matches. Content completely misidentified as 'tax/audit tier ranges and calculations' \u2014 entirely hallucinated."}, {"text": "At least one Homework section is present", "passed": true, "evidence": "Homework sections present"}, {"text": "File has meaningful length (at least 100 lines)", "passed": true, "evidence": "155 lines"}], "pass_count": 3, "total_count": 4, "pass_rate": 0.75, "summary": {"passed": 3, "failed": 1, "total": 4, "pass_rate": 0.75}}}], "previous_feedback": {}, "previous_outputs": {}, "benchmark": {"metadata": {"skill_name": "handwritten-pdf-transcriber", "skill_path": "/sessions/great-funny-newton/handwritten-pdf-transcriber", "executor_model": "claude-sonnet-4-6", "analyzer_model": "claude-sonnet-4-6", "timestamp": "2026-03-26T06:39:14Z", "evals_run": ["eval-1-ptm-all", "eval-2-ptm-two-files", "eval-3-ptm-single"], "runs_per_configuration": 1}, "runs": [{"eval_id": 1, "eval_name": "All 4 PTM files \u2192 single merged md", "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 6, "failed": 0, "total": 6, "time_seconds": 260.9, "tokens": 43607, "tool_calls": 29, "errors": 0}, "expectations": [{"text": "Output file ptm_notes.md is created", "passed": true, "evidence": "File found, 289 lines"}, {"text": "4 date headers in chronological order", "passed": true, "evidence": "12-10, 19-10, 26-10, 27-10 all present"}, {"text": "Each section has transcribed content", "passed": true, "evidence": "All 4 sections have subsections and bullets"}, {"text": "Abbreviations (TTR, TTRD, BO, BL, ADR) preserved", "passed": true, "evidence": "40 matches; key terms intact with minor edge-case errors"}, {"text": "Homework sections present and marked", "passed": true, "evidence": "Multiple ### Homework: blocks found"}, {"text": "Watermark text not in output", "passed": true, "evidence": "0 matches for hash/hotmail watermark"}], "notes": []}, {"eval_id": 1, "eval_name": "All 4 PTM files \u2192 single merged md", "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 0.667, "passed": 4, "failed": 2, "total": 6, "time_seconds": 54.4, "tokens": 29249, "tool_calls": 5, "errors": 0}, "expectations": [{"text": "Output file ptm_notes.md is created", "passed": true, "evidence": "File found, 349 lines"}, {"text": "4 date headers in chronological order", "passed": true, "evidence": "4 headers present but format 'October 12, 2025'"}, {"text": "Each section has transcribed content", "passed": false, "evidence": "Content severely hallucinated \u2014 Oct 27 references 'Brand/Bund' analysis, Oct 19 describes wrong day type entirely"}, {"text": "Abbreviations (TTR, TTRD, BO, BL, ADR) preserved", "passed": false, "evidence": "TTRD\u2192TTFRO, ORV\u2192GAY, BL\u2192KGL; core vocabulary corrupted"}, {"text": "Homework sections present and marked", "passed": true, "evidence": "Homework sections present in each block"}, {"text": "Watermark text not in output", "passed": true, "evidence": "0 matches for watermark"}], "notes": ["Used only 5 tool calls \u2014 likely skipped image conversion and read PDFs directly, causing hallucination"]}, {"eval_id": 2, "eval_name": "Two PTM files \u2192 oct_late.md", "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 4, "failed": 0, "total": 4, "time_seconds": 181.1, "tokens": 35287, "tool_calls": 18, "errors": 0}, "expectations": [{"text": "oct_late.md created", "passed": true, "evidence": "File found"}, {"text": "Exactly 2 date headers", "passed": true, "evidence": "## 26-10-2025 and ## 27-10-2025"}, {"text": "Oct 26 before Oct 27", "passed": true, "evidence": "Correct chronological order"}, {"text": "Rev Day types present (Horseshoe, ORV, MDR)", "passed": true, "evidence": "All three terms present plus SPIKE & REV, RXL"}], "notes": []}, {"eval_id": 2, "eval_name": "Two PTM files \u2192 oct_late.md", "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 0.75, "passed": 3, "failed": 1, "total": 4, "time_seconds": 146.8, "tokens": 25704, "tool_calls": 3, "errors": 0}, "expectations": [{"text": "oct_late.md created", "passed": true, "evidence": "File found, 150 lines"}, {"text": "Exactly 2 date headers", "passed": true, "evidence": "2 headers present"}, {"text": "Oct 26 before Oct 27", "passed": true, "evidence": "Correct order"}, {"text": "Rev Day types present (Horseshoe, ORV, MDR)", "passed": false, "evidence": "Only 2 keyword matches; content largely fabricated \u2014 'heatmap analysis', 'battery analysis' never in source"}], "notes": ["Only 3 tool calls \u2014 did not run image pipeline"]}, {"eval_id": 3, "eval_name": "Single PTM file \u2192 ptm_19oct.md", "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 4, "failed": 0, "total": 4, "time_seconds": 108.7, "tokens": 33625, "tool_calls": 16, "errors": 0}, "expectations": [{"text": "ptm_19oct.md created", "passed": true, "evidence": "File found, 134 lines"}, {"text": "TR Days, TTRD, 3+ subtypes present", "passed": true, "evidence": "LTR, UTR, ET, T3, MRO all appear"}, {"text": "At least one Homework section", "passed": true, "evidence": "Multiple homework sections found"}, {"text": "File \u2265 100 lines", "passed": true, "evidence": "134 lines"}], "notes": []}, {"eval_id": 3, "eval_name": "Single PTM file \u2192 ptm_19oct.md", "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 0.75, "passed": 3, "failed": 1, "total": 4, "time_seconds": 76.6, "tokens": 24039, "tool_calls": 2, "errors": 0}, "expectations": [{"text": "ptm_19oct.md created", "passed": true, "evidence": "File found, 155 lines"}, {"text": "TR Days, TTRD, 3+ subtypes present", "passed": false, "evidence": "0 matches for TTRD/UTR/LTR/MRO/T3/ET \u2014 content described as 'tax/audit tier ranges'"}, {"text": "At least one Homework section", "passed": true, "evidence": "Homework sections present"}, {"text": "File \u2265 100 lines", "passed": true, "evidence": "155 lines"}], "notes": ["Only 2 tool calls \u2014 did not open PDF as image, hallucinated completely different domain"]}], "run_summary": {"with_skill": {"pass_rate": {"mean": 1.0, "stddev": 0.0, "min": 1.0, "max": 1.0}, "time_seconds": {"mean": 183.6, "stddev": 62.5, "min": 108.7, "max": 260.9}, "tokens": {"mean": 37506, "stddev": 4251, "min": 33625, "max": 43607}}, "without_skill": {"pass_rate": {"mean": 0.697, "stddev": 0.039, "min": 0.667, "max": 0.75}, "time_seconds": {"mean": 92.6, "stddev": 38.2, "min": 54.4, "max": 146.8}, "tokens": {"mean": 26331, "stddev": 2218, "min": 24039, "max": 29249}}, "delta": {"pass_rate": "+0.30", "time_seconds": "+91.0", "tokens": "+11175"}}, "notes": ["Without-skill runs used 2-5 tool calls vs 16-29 for with-skill \u2014 baseline agents never converted PDFs to images", "Core failure mode: without skill, agent attempts direct pdfplumber extraction which returns garbled data, then either hallucinates or describes wrong content entirely", "Assertion 'file created' passes for both \u2014 not a discriminating check; the quality gap is entirely in content accuracy", "Skill adds ~91s and ~11k tokens on average but achieves 100% pass rate vs ~70% baseline", "The token cost is justified: handwriting vision requires multiple image reads; baseline is 'fast but wrong'"]}};
+
+    // ---- State ----
+    let feedbackMap = {};  // run_id -> feedback text
+    let currentIndex = 0;
+    let visitedRuns = new Set();
+
+    // ---- Init ----
+    async function init() {
+      // Load saved feedback from server — but only if this isn't a fresh
+      // iteration (indicated by previous_feedback being present). When
+      // previous feedback exists, the feedback.json on disk is stale from
+      // the prior iteration and should not pre-fill the textareas.
+      const hasPrevious = Object.keys(EMBEDDED_DATA.previous_feedback || {}).length > 0
+        || Object.keys(EMBEDDED_DATA.previous_outputs || {}).length > 0;
+      if (!hasPrevious) {
+        try {
+          const resp = await fetch("/api/feedback");
+          const data = await resp.json();
+          if (data.reviews) {
+            for (const r of data.reviews) feedbackMap[r.run_id] = r.feedback;
+          }
+        } catch { /* first run, no feedback yet */ }
+      }
+
+      document.getElementById("skill-name").textContent = EMBEDDED_DATA.skill_name;
+      showRun(0);
+
+      // Wire up feedback auto-save
+      const textarea = document.getElementById("feedback");
+      let saveTimeout = null;
+      textarea.addEventListener("input", () => {
+        clearTimeout(saveTimeout);
+        document.getElementById("feedback-status").textContent = "";
+        saveTimeout = setTimeout(() => saveCurrentFeedback(), 800);
+      });
+    }
+
+    // ---- Navigation ----
+    function navigate(delta) {
+      const newIndex = currentIndex + delta;
+      if (newIndex >= 0 && newIndex < EMBEDDED_DATA.runs.length) {
+        saveCurrentFeedback();
+        showRun(newIndex);
+      }
+    }
+
+    function updateNavButtons() {
+      document.getElementById("prev-btn").disabled = currentIndex === 0;
+      document.getElementById("next-btn").disabled =
+        currentIndex === EMBEDDED_DATA.runs.length - 1;
+    }
+
+    // ---- Show a run ----
+    function showRun(index) {
+      currentIndex = index;
+      const run = EMBEDDED_DATA.runs[index];
+
+      // Progress
+      document.getElementById("progress").textContent =
+        `${index + 1} of ${EMBEDDED_DATA.runs.length}`;
+
+      // Prompt
+      document.getElementById("prompt-text").textContent = run.prompt;
+
+      // Config badge
+      const badge = document.getElementById("config-badge");
+      const configMatch = run.id.match(/(with_skill|without_skill|new_skill|old_skill)/);
+      if (configMatch) {
+        const config = configMatch[1];
+        const isBaseline = config === "without_skill" || config === "old_skill";
+        badge.textContent = config.replace(/_/g, " ");
+        badge.className = "config-badge " + (isBaseline ? "config-baseline" : "config-primary");
+        badge.style.display = "inline-block";
+      } else {
+        badge.style.display = "none";
+      }
+
+      // Outputs
+      renderOutputs(run);
+
+      // Previous outputs
+      renderPrevOutputs(run);
+
+      // Grades
+      renderGrades(run);
+
+      // Previous feedback
+      const prevFb = (EMBEDDED_DATA.previous_feedback || {})[run.id];
+      const prevEl = document.getElementById("prev-feedback");
+      if (prevFb) {
+        document.getElementById("prev-feedback-text").textContent = prevFb;
+        prevEl.style.display = "block";
+      } else {
+        prevEl.style.display = "none";
+      }
+
+      // Feedback
+      document.getElementById("feedback").value = feedbackMap[run.id] || "";
+      document.getElementById("feedback-status").textContent = "";
+
+      updateNavButtons();
+
+      // Track visited runs and promote done button when all visited
+      visitedRuns.add(index);
+      const doneBtn = document.getElementById("done-btn");
+      if (visitedRuns.size >= EMBEDDED_DATA.runs.length) {
+        doneBtn.classList.add("ready");
+      }
+
+      // Scroll main content to top
+      document.querySelector(".main").scrollTop = 0;
+    }
+
+    // ---- Render outputs ----
+    function renderOutputs(run) {
+      const container = document.getElementById("outputs-body");
+      container.innerHTML = "";
+
+      const outputs = run.outputs || [];
+      if (outputs.length === 0) {
+        container.innerHTML = '<div class="empty-state">No output files</div>';
+        return;
+      }
+
+      for (const file of outputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        // Always show file header with download link
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const content = document.createElement("div");
+        content.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          content.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          content.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          content.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(content, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          content.appendChild(a);
+        } else if (file.type === "error") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          pre.style.color = "var(--red)";
+          content.appendChild(pre);
+        }
+
+        fileDiv.appendChild(content);
+        container.appendChild(fileDiv);
+      }
+    }
+
+    // ---- XLSX rendering via SheetJS ----
+    function renderXlsx(container, b64Data) {
+      try {
+        const raw = Uint8Array.from(atob(b64Data), c => c.charCodeAt(0));
+        const wb = XLSX.read(raw, { type: "array" });
+
+        for (let i = 0; i < wb.SheetNames.length; i++) {
+          const sheetName = wb.SheetNames[i];
+          const ws = wb.Sheets[sheetName];
+
+          if (wb.SheetNames.length > 1) {
+            const sheetLabel = document.createElement("div");
+            sheetLabel.style.cssText =
+              "font-weight:600; font-size:0.8rem; color:#b0aea5; margin-top:0.5rem; margin-bottom:0.25rem;";
+            sheetLabel.textContent = "Sheet: " + sheetName;
+            container.appendChild(sheetLabel);
+          }
+
+          const htmlStr = XLSX.utils.sheet_to_html(ws, { editable: false });
+          const wrapper = document.createElement("div");
+          wrapper.innerHTML = htmlStr;
+          container.appendChild(wrapper);
+        }
+      } catch (err) {
+        container.textContent = "Error rendering spreadsheet: " + err.message;
+      }
+    }
+
+    // ---- Grades ----
+    function renderGrades(run) {
+      const section = document.getElementById("grades-section");
+      const content = document.getElementById("grades-content");
+
+      if (!run.grading) {
+        section.style.display = "none";
+        return;
+      }
+
+      const grading = run.grading;
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("grades-arrow").classList.remove("open");
+
+      const summary = grading.summary || {};
+      const expectations = grading.expectations || [];
+
+      let html = '<div style="padding: 1rem;">';
+
+      // Summary line
+      const passRate = summary.pass_rate != null
+        ? Math.round(summary.pass_rate * 100) + "%"
+        : "?";
+      const badgeClass = summary.pass_rate >= 0.8 ? "grade-pass" : summary.pass_rate >= 0.5 ? "" : "grade-fail";
+      html += '<div class="grades-summary">';
+      html += '<span class="grade-badge ' + badgeClass + '">' + passRate + '</span>';
+      html += '<span>' + (summary.passed || 0) + ' passed, ' + (summary.failed || 0) + ' failed of ' + (summary.total || 0) + '</span>';
+      html += '</div>';
+
+      // Assertions list
+      html += '<ul class="assertion-list">';
+      for (const exp of expectations) {
+        const statusClass = exp.passed ? "pass" : "fail";
+        const statusIcon = exp.passed ? "\u2713" : "\u2717";
+        html += '<li class="assertion-item">';
+        html += '<span class="assertion-status ' + statusClass + '">' + statusIcon + '</span>';
+        html += '<span>' + escapeHtml(exp.text) + '</span>';
+        if (exp.evidence) {
+          html += '<div class="assertion-evidence">' + escapeHtml(exp.evidence) + '</div>';
+        }
+        html += '</li>';
+      }
+      html += '</ul>';
+
+      html += '</div>';
+      content.innerHTML = html;
+    }
+
+    function toggleGrades() {
+      const content = document.getElementById("grades-content");
+      const arrow = document.getElementById("grades-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Previous outputs (collapsible) ----
+    function renderPrevOutputs(run) {
+      const section = document.getElementById("prev-outputs-section");
+      const content = document.getElementById("prev-outputs-content");
+      const prevOutputs = (EMBEDDED_DATA.previous_outputs || {})[run.id];
+
+      if (!prevOutputs || prevOutputs.length === 0) {
+        section.style.display = "none";
+        return;
+      }
+
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("prev-outputs-arrow").classList.remove("open");
+
+      // Render the files into the content area
+      content.innerHTML = "";
+      const wrapper = document.createElement("div");
+      wrapper.style.padding = "1rem";
+
+      for (const file of prevOutputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const fc = document.createElement("div");
+        fc.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          fc.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          fc.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          fc.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(fc, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          fc.appendChild(a);
+        }
+
+        fileDiv.appendChild(fc);
+        wrapper.appendChild(fileDiv);
+      }
+
+      content.appendChild(wrapper);
+    }
+
+    function togglePrevOutputs() {
+      const content = document.getElementById("prev-outputs-content");
+      const arrow = document.getElementById("prev-outputs-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Feedback (saved to server -> feedback.json) ----
+    function saveCurrentFeedback() {
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // Build reviews array from map
+      const reviews = [];
+      for (const [run_id, feedback] of Object.entries(feedbackMap)) {
+        if (feedback.trim()) {
+          reviews.push({ run_id, feedback, timestamp: new Date().toISOString() });
+        }
+      }
+
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviews, status: "in_progress" }),
+      }).then(() => {
+        document.getElementById("feedback-status").textContent = "Saved";
+      }).catch(() => {
+        // Static mode or server unavailable — no-op on auto-save,
+        // feedback will be downloaded on final submit
+        document.getElementById("feedback-status").textContent = "Will download on submit";
+      });
+    }
+
+    // ---- Done ----
+    function showDoneDialog() {
+      // Save current textarea to feedbackMap (but don't POST yet)
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // POST once with status: complete — include ALL runs so the model
+      // can distinguish "no feedback" (looks good) from "not reviewed"
+      const reviews = [];
+      const ts = new Date().toISOString();
+      for (const r of EMBEDDED_DATA.runs) {
+        reviews.push({ run_id: r.id, feedback: feedbackMap[r.id] || "", timestamp: ts });
+      }
+      const payload = JSON.stringify({ reviews, status: "complete" }, null, 2);
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      }).then(() => {
+        document.getElementById("done-overlay").classList.add("visible");
+      }).catch(() => {
+        // Server not available (static mode) — download as file
+        const blob = new Blob([payload], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "feedback.json";
+        a.click();
+        URL.revokeObjectURL(url);
+        document.getElementById("done-overlay").classList.add("visible");
+      });
+    }
+
+    function closeDoneDialog() {
+      // Reset status back to in_progress
+      saveCurrentFeedback();
+      document.getElementById("done-overlay").classList.remove("visible");
+    }
+
+    // ---- Toast ----
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("visible");
+      setTimeout(() => toast.classList.remove("visible"), 2000);
+    }
+
+    // ---- Keyboard nav ----
+    document.addEventListener("keydown", (e) => {
+      // Don't capture when typing in textarea
+      if (e.target.tagName === "TEXTAREA") return;
+
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        navigate(-1);
+      } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        navigate(1);
+      }
+    });
+
+    // ---- Util ----
+    function getDownloadUri(file) {
+      if (file.data_uri) return file.data_uri;
+      if (file.data_b64) return "data:application/octet-stream;base64," + file.data_b64;
+      if (file.type === "text") return "data:text/plain;charset=utf-8," + encodeURIComponent(file.content);
+      return "#";
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ---- View switching ----
+    function switchView(view) {
+      document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".view-panel").forEach(p => p.classList.remove("active"));
+      document.querySelector(`[onclick="switchView('${view}')"]`).classList.add("active");
+      document.getElementById("panel-" + view).classList.add("active");
+    }
+
+    // ---- Benchmark rendering ----
+    function renderBenchmark() {
+      const data = EMBEDDED_DATA.benchmark;
+      if (!data) return;
+
+      // Show the tabs
+      document.getElementById("view-tabs").style.display = "flex";
+
+      const container = document.getElementById("benchmark-content");
+      const summary = data.run_summary || {};
+      const metadata = data.metadata || {};
+      const notes = data.notes || [];
+
+      let html = "";
+
+      // Header
+      html += "<h2 style='font-family: Poppins, sans-serif; margin-bottom: 0.5rem;'>Benchmark Results</h2>";
+      html += "<p style='color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.25rem;'>";
+      if (metadata.skill_name) html += "<strong>" + escapeHtml(metadata.skill_name) + "</strong> &mdash; ";
+      if (metadata.timestamp) html += metadata.timestamp + " &mdash; ";
+      if (metadata.evals_run) html += "Evals: " + metadata.evals_run.join(", ") + " &mdash; ";
+      html += (metadata.runs_per_configuration || "?") + " runs per configuration";
+      html += "</p>";
+
+      // Summary table
+      html += '<table class="benchmark-table">';
+
+      function fmtStat(stat, pct) {
+        if (!stat) return "—";
+        const suffix = pct ? "%" : "";
+        const m = pct ? (stat.mean * 100).toFixed(0) : stat.mean.toFixed(1);
+        const s = pct ? (stat.stddev * 100).toFixed(0) : stat.stddev.toFixed(1);
+        return m + suffix + " ± " + s + suffix;
+      }
+
+      function deltaClass(val) {
+        if (!val) return "";
+        const n = parseFloat(val);
+        if (n > 0) return "benchmark-delta-positive";
+        if (n < 0) return "benchmark-delta-negative";
+        return "";
+      }
+
+      // Discover config names dynamically (everything except "delta")
+      const configs = Object.keys(summary).filter(k => k !== "delta");
+      const configA = configs[0] || "config_a";
+      const configB = configs[1] || "config_b";
+      const labelA = configA.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const labelB = configB.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const a = summary[configA] || {};
+      const b = summary[configB] || {};
+      const delta = summary.delta || {};
+
+      html += "<thead><tr><th>Metric</th><th>" + escapeHtml(labelA) + "</th><th>" + escapeHtml(labelB) + "</th><th>Delta</th></tr></thead>";
+      html += "<tbody>";
+
+      html += "<tr><td><strong>Pass Rate</strong></td>";
+      html += "<td>" + fmtStat(a.pass_rate, true) + "</td>";
+      html += "<td>" + fmtStat(b.pass_rate, true) + "</td>";
+      html += '<td class="' + deltaClass(delta.pass_rate) + '">' + (delta.pass_rate || "—") + "</td></tr>";
+
+      // Time (only show row if data exists)
+      if (a.time_seconds || b.time_seconds) {
+        html += "<tr><td><strong>Time (s)</strong></td>";
+        html += "<td>" + fmtStat(a.time_seconds, false) + "</td>";
+        html += "<td>" + fmtStat(b.time_seconds, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.time_seconds) + '">' + (delta.time_seconds ? delta.time_seconds + "s" : "—") + "</td></tr>";
+      }
+
+      // Tokens (only show row if data exists)
+      if (a.tokens || b.tokens) {
+        html += "<tr><td><strong>Tokens</strong></td>";
+        html += "<td>" + fmtStat(a.tokens, false) + "</td>";
+        html += "<td>" + fmtStat(b.tokens, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.tokens) + '">' + (delta.tokens || "—") + "</td></tr>";
+      }
+
+      html += "</tbody></table>";
+
+      // Per-eval breakdown (if runs data available)
+      const runs = data.runs || [];
+      if (runs.length > 0) {
+        const evalIds = [...new Set(runs.map(r => r.eval_id))].sort((a, b) => a - b);
+
+        html += "<h3 style='font-family: Poppins, sans-serif; margin-bottom: 0.75rem;'>Per-Eval Breakdown</h3>";
+
+        const hasTime = runs.some(r => r.result && r.result.time_seconds != null);
+        const hasErrors = runs.some(r => r.result && r.result.errors > 0);
+
+        for (const evalId of evalIds) {
+          const evalRuns = runs.filter(r => r.eval_id === evalId);
+          const evalName = evalRuns[0] && evalRuns[0].eval_name ? evalRuns[0].eval_name : "Eval " + evalId;
+
+          html += "<h4 style='font-family: Poppins, sans-serif; margin: 1rem 0 0.5rem; color: var(--text);'>" + escapeHtml(evalName) + "</h4>";
+          html += '<table class="benchmark-table">';
+          html += "<thead><tr><th>Config</th><th>Run</th><th>Pass Rate</th>";
+          if (hasTime) html += "<th>Time (s)</th>";
+          if (hasErrors) html += "<th>Crashes During Execution</th>";
+          html += "</tr></thead>";
+          html += "<tbody>";
+
+          // Group by config and render with average rows
+          const configGroups = [...new Set(evalRuns.map(r => r.configuration))];
+          for (let ci = 0; ci < configGroups.length; ci++) {
+            const config = configGroups[ci];
+            const configRuns = evalRuns.filter(r => r.configuration === config);
+            if (configRuns.length === 0) continue;
+
+            const rowClass = ci === 0 ? "benchmark-row-with" : "benchmark-row-without";
+            const configLabel = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+            for (const run of configRuns) {
+              const r = run.result || {};
+              const prClass = r.pass_rate >= 0.8 ? "benchmark-delta-positive" : r.pass_rate < 0.5 ? "benchmark-delta-negative" : "";
+              html += '<tr class="' + rowClass + '">';
+              html += "<td>" + configLabel + "</td>";
+              html += "<td>" + run.run_number + "</td>";
+              html += '<td class="' + prClass + '">' + ((r.pass_rate || 0) * 100).toFixed(0) + "% (" + (r.passed || 0) + "/" + (r.total || 0) + ")</td>";
+              if (hasTime) html += "<td>" + (r.time_seconds != null ? r.time_seconds.toFixed(1) : "—") + "</td>";
+              if (hasErrors) html += "<td>" + (r.errors || 0) + "</td>";
+              html += "</tr>";
+            }
+
+            // Average row
+            const rates = configRuns.map(r => (r.result || {}).pass_rate || 0);
+            const avgRate = rates.reduce((a, b) => a + b, 0) / rates.length;
+            const avgPrClass = avgRate >= 0.8 ? "benchmark-delta-positive" : avgRate < 0.5 ? "benchmark-delta-negative" : "";
+            html += '<tr class="benchmark-row-avg ' + rowClass + '">';
+            html += "<td>" + configLabel + "</td>";
+            html += "<td>Avg</td>";
+            html += '<td class="' + avgPrClass + '">' + (avgRate * 100).toFixed(0) + "%</td>";
+            if (hasTime) {
+              const times = configRuns.map(r => (r.result || {}).time_seconds).filter(t => t != null);
+              html += "<td>" + (times.length ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) : "—") + "</td>";
+            }
+            if (hasErrors) html += "<td></td>";
+            html += "</tr>";
+          }
+          html += "</tbody></table>";
+
+          // Per-assertion detail for this eval
+          const runsWithExpectations = {};
+          for (const config of configGroups) {
+            runsWithExpectations[config] = evalRuns.filter(r => r.configuration === config && r.expectations && r.expectations.length > 0);
+          }
+          const hasAnyExpectations = Object.values(runsWithExpectations).some(runs => runs.length > 0);
+          if (hasAnyExpectations) {
+            // Collect all unique assertion texts across all configs
+            const allAssertions = [];
+            const seen = new Set();
+            for (const config of configGroups) {
+              for (const run of runsWithExpectations[config]) {
+                for (const exp of (run.expectations || [])) {
+                  if (!seen.has(exp.text)) {
+                    seen.add(exp.text);
+                    allAssertions.push(exp.text);
+                  }
+                }
+              }
+            }
+
+            html += '<table class="benchmark-table" style="margin-top: 0.5rem;">';
+            html += "<thead><tr><th>Assertion</th>";
+            for (const config of configGroups) {
+              const label = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+              html += "<th>" + escapeHtml(label) + "</th>";
+            }
+            html += "</tr></thead><tbody>";
+
+            for (const assertionText of allAssertions) {
+              html += "<tr><td>" + escapeHtml(assertionText) + "</td>";
+
+              for (const config of configGroups) {
+                html += "<td>";
+                for (const run of runsWithExpectations[config]) {
+                  const exp = (run.expectations || []).find(e => e.text === assertionText);
+                  if (exp) {
+                    const cls = exp.passed ? "benchmark-delta-positive" : "benchmark-delta-negative";
+                    const icon = exp.passed ? "\u2713" : "\u2717";
+                    html += '<span class="' + cls + '" title="Run ' + run.run_number + ': ' + escapeHtml(exp.evidence || "") + '">' + icon + "</span> ";
+                  } else {
+                    html += "— ";
+                  }
+                }
+                html += "</td>";
+              }
+              html += "</tr>";
+            }
+            html += "</tbody></table>";
+          }
+        }
+      }
+
+      // Notes
+      if (notes.length > 0) {
+        html += '<div class="benchmark-notes">';
+        html += "<h3>Analysis Notes</h3>";
+        html += "<ul>";
+        for (const note of notes) {
+          html += "<li>" + escapeHtml(note) + "</li>";
+        }
+        html += "</ul></div>";
+      }
+
+      container.innerHTML = html;
+    }
+
+    // ---- Start ----
+    init();
+    renderBenchmark();
+  </script>
+</body>
+</html>
