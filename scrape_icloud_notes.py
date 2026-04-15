@@ -488,15 +488,22 @@ def scrape_notes(frame, args, note_sel, parent_page=None, notes=None):
     total = len(items)
     print(f"\n📋 Found {total} notes in sidebar")
 
-    if args.limit and args.limit < total:
-        total = args.limit
-        print(f"   (limiting to {total})")
+    target_count = args.limit or total
+    if args.limit:
+        print(f"   (saving {target_count} distinct notes; scanning up to {total} sidebar rows)")
 
     # ── Iterate notes ────────────────────────────────────────────────────
     if notes is None:
         notes = []
-    seen_body_hashes = {}
+    seen_body_hashes = {
+        text_fingerprint(note.get("body", "")): note.get("title", "Untitled")
+        for note in notes
+        if note.get("body")
+    }
     for idx in range(total):
+        if len(notes) >= target_count:
+            break
+
         # Re-query because DOM may have mutated
         items = frame.query_selector_all(note_sel)
         if idx >= len(items):
@@ -581,15 +588,13 @@ def scrape_notes(frame, args, note_sel, parent_page=None, notes=None):
 
         body = remove_duplicate_title(body, title)
         body_hash = text_fingerprint(body) if body else ""
-        duplicate_body_from = None
         previous_title = seen_body_hashes.get(body_hash)
-        if body_hash and previous_title and previous_title != title:
-            duplicate_body_from = previous_title
+        if body_hash and previous_title:
             print(
-                "      warning: final body still matches a previous note; "
-                "using copied-body title and preserving sidebar title"
+                f"      warning: sidebar row {idx+1} copied the same body as "
+                f"'{previous_title[:50]}'; skipping duplicate and continuing"
             )
-            title = previous_title
+            continue
         if body_hash:
             seen_body_hashes.setdefault(body_hash, title)
 
@@ -600,13 +605,19 @@ def scrape_notes(frame, args, note_sel, parent_page=None, notes=None):
             "body_length": len(body),
             "scraped_at": datetime.now(timezone.utc).isoformat(),
             "extraction_method": extraction_method,
-            "duplicate_body_from": duplicate_body_from,
         })
 
-        pct = (idx + 1) / total * 100
+        pct = len(notes) / target_count * 100
         print(
-            f"   [{idx+1}/{total}] ({pct:.0f}%) {title[:50]}  "
+            f"   [{len(notes)}/{target_count}] ({pct:.0f}%) "
+            f"sidebar row {idx+1}: {title[:50]}  "
             f"— {len(body)} chars via {extraction_method}"
+        )
+
+    if len(notes) < target_count:
+        print(
+            f"\n⚠️  Saved {len(notes)} distinct notes, but requested {target_count}. "
+            f"Scanned {total} sidebar rows."
         )
 
     return notes
